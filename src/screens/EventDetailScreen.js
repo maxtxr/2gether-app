@@ -3,9 +3,7 @@ import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, levelColors } from '../theme';
 import { useApp } from '../context/AppContext';
-import Avatar, { initials } from '../components/Avatar';
-import Button from '../components/Button';
-import ConfirmModal from '../components/ConfirmModal';
+import { Avatar, initials, Button, ConfirmModal, AccessibilityBadge } from '../components';
 
 export default function EventDetailScreen({ route, navigation }) {
   const { events, goingIds, hostedIds, countOf, spotsLeft, joinEvent, leaveEvent } = useApp();
@@ -63,8 +61,7 @@ export default function EventDetailScreen({ route, navigation }) {
 
       {event.accessibility.length > 0 && (
         <View style={styles.access}>
-          <Ionicons name="accessibility" size={18} color={colors.green} />
-          <Text style={styles.accessText}>{event.accessibility.join(' · ')}</Text>
+          {event.accessibility.map((a) => <AccessibilityBadge key={a} label={a} />)}
         </View>
       )}
 
@@ -113,8 +110,7 @@ const styles = StyleSheet.create({
   levelPill: { alignSelf: 'flex-start', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4, marginTop: 14 },
   levelText: { color: '#fff', fontWeight: '600', fontSize: 12 },
   desc: { color: colors.text, lineHeight: 22, marginTop: 14 },
-  access: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  accessText: { color: colors.green, marginLeft: 8, flex: 1 },
+  access: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
   partHeader: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, marginBottom: 8 },
   partTitle: { fontWeight: '700', color: colors.text },
   partSub: { color: colors.muted, fontSize: 13 },

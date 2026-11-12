@@ -48,6 +48,8 @@ export function AppProvider({ children }) {
     const e = {
       ...data, id, host: user.name, base: 1, people: [], short: data.when, address: '',
       area: data.place,
+      // No geocoding in this prototype — new events land near central Lisbon.
+      lat: 38.71, lng: -9.13,
     };
     setEvents((prev) => [e, ...prev]);
     setHostedIds((prev) => [...prev, id]);

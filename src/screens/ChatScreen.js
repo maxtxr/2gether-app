@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
 import { View, Text, TextInput, FlatList, Pressable, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
-import Avatar from '../components/Avatar';
+import { Avatar } from '../components';
 
 export default function ChatScreen({ route }) {
   const { events, chats, sendMessage, countOf } = useApp();
@@ -72,6 +72,6 @@ const styles = StyleSheet.create({
   theirs: { backgroundColor: '#fff' },
   time: { fontSize: 11, color: colors.muted, marginTop: 2 },
   inputRow: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#fff' },
-  input: { flex: 1, backgroundColor: colors.input, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10 },
+  input: { flex: 1, backgroundColor: colors.input, borderRadius: radii.pill, paddingHorizontal: 16, paddingVertical: 10 },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
 });

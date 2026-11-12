@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
 
 export default function NotificationsScreen({ navigation }) {
@@ -12,7 +12,7 @@ export default function NotificationsScreen({ navigation }) {
       <Text style={styles.title}>Notifications</Text>
       <View style={styles.row}>
         <Text style={styles.sub}>{unreadCount} unread</Text>
-        <View style={{ flexDirection: 'row' }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable onPress={markAllRead} style={styles.action} accessibilityRole="button"><Text style={styles.actionText}>Mark all as read</Text></Pressable>
           <Pressable onPress={clearNotifications} style={styles.action} accessibilityRole="button"><Text style={[styles.actionText, { color: colors.danger }]}>Clear all</Text></Pressable>
         </View>
@@ -35,7 +35,7 @@ export default function NotificationsScreen({ navigation }) {
                 <Text style={styles.time}>{n.time}</Text>
               </View>
               {n.unread && <View style={styles.dot} />}
-              <Pressable onPress={() => deleteNotification(n.id)} hitSlop={10} accessibilityLabel="Delete notification" style={{ padding: 6 }}>
+              <Pressable onPress={(e) => { e.stopPropagation(); deleteNotification(n.id); }} hitSlop={4} accessibilityLabel="Delete notification" style={styles.deleteBtn}>
                 <Ionicons name="trash-outline" size={20} color={colors.muted} />
               </Pressable>
             </Pressable>
@@ -53,8 +53,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: '800', color: colors.green },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
   sub: { color: colors.muted },
-  action: { paddingVertical: 8, paddingLeft: 14 },
+  action: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radii.pill, backgroundColor: colors.chip },
   actionText: { fontWeight: '700', color: colors.text, fontSize: 13 },
+  deleteBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.chip, alignItems: 'center', justifyContent: 'center' },
   group: { fontWeight: '700', color: colors.text, marginTop: 14, marginBottom: 8 },
   card: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#fff', borderRadius: 14, padding: 12, marginBottom: 10 },
   icon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.chip, alignItems: 'center', justifyContent: 'center', marginRight: 10 },

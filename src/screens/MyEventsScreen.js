@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
-import { colors } from '../theme';
+import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
-import EventCard from '../components/EventCard';
-import Button from '../components/Button';
+import { EventCard, Button } from '../components';
 
 export default function MyEventsScreen({ navigation }) {
   const { events, goingIds, hostedEvents, pastEvents, reviews } = useApp();
@@ -45,7 +44,7 @@ export default function MyEventsScreen({ navigation }) {
                 event={e}
                 onPress={() => open(e.id)}
                 right={
-                  <Pressable onPress={() => navigation.navigate('Review', { id: e.id })} style={[styles.reviewBtn, r && styles.reviewDone]} accessibilityRole="button">
+                  <Pressable onPress={(e) => { e.stopPropagation(); navigation.navigate('Review', { id: e.id }); }} style={[styles.reviewBtn, r && styles.reviewDone]} accessibilityRole="button">
                     <Text style={[styles.reviewText, r && { color: '#fff' }]}>{r ? `★ ${r.rating}` : 'Review'}</Text>
                   </Pressable>
                 }
@@ -65,12 +64,12 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: '800', color: colors.green },
   sub: { color: colors.muted, marginBottom: 14 },
   segment: { flexDirection: 'row', backgroundColor: colors.chip, borderRadius: 22, padding: 4, marginBottom: 6 },
-  segBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 18 },
+  segBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: radii.pill },
   segOn: { backgroundColor: colors.green },
   segText: { fontWeight: '600', color: colors.text },
   section: { fontWeight: '700', color: colors.text, marginTop: 16, marginBottom: 8 },
   empty: { color: colors.muted, marginBottom: 8 },
-  reviewBtn: { borderWidth: 1.5, borderColor: colors.orange, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7 },
+  reviewBtn: { borderWidth: 1.5, borderColor: colors.orange, borderRadius: radii.pill, paddingHorizontal: 14, paddingVertical: 7 },
   reviewDone: { backgroundColor: colors.green, borderColor: colors.green },
   reviewText: { color: colors.orange, fontWeight: '700', fontSize: 13 },
 });

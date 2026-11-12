@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, radii } from '../theme';
 import { CATEGORIES, LEVELS, ACCESSIBILITY } from '../data/options';
 import { useApp } from '../context/AppContext';
-import Chip from '../components/Chip';
-import EventCard from '../components/EventCard';
+import { Chip, EventCard } from '../components';
+import EventMap from '../components/events/EventMap';
 
 const toggle = (cur, v) => (cur === v ? null : v);
 
@@ -16,6 +16,7 @@ export default function ExploreScreen({ navigation }) {
   const [showFilters, setShowFilters] = useState(false);
   const [level, setLevel] = useState(null);
   const [access, setAccess] = useState(null);
+  const [view, setView] = useState('list');
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -56,13 +57,39 @@ export default function ExploreScreen({ navigation }) {
         </View>
       )}
 
+      <View style={styles.segment}>
+        {[['list', 'List'], ['map', 'Map']].map(([v, label]) => (
+          <Pressable
+            key={v}
+            onPress={() => setView(v)}
+            style={[styles.segBtn, view === v && styles.segOn]}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.segText, view === v && styles.segTextOn]}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
       <View style={styles.headerRow}>
         <Text style={styles.heading}>Events near you</Text>
         <Text style={styles.count}>{list.length} {list.length === 1 ? 'event' : 'events'}</Text>
       </View>
 
-      {list.map((e) => <EventCard key={e.id} event={e} onPress={() => navigation.navigate('EventDetail', { id: e.id })} />)}
-      {list.length === 0 && <Text style={styles.empty}>No events match. Try clearing a filter.</Text>}
+      {view === 'map' ? (
+        <View style={styles.mapWrap}>
+          <EventMap events={list} onEventPress={(id) => navigation.navigate('EventDetail', { id })} />
+          {list.length === 0 && (
+            <View style={styles.mapEmpty}>
+              <Text style={styles.empty}>No events match. Try clearing a filter.</Text>
+            </View>
+          )}
+        </View>
+      ) : (
+        <>
+          {list.map((e) => <EventCard key={e.id} event={e} onPress={() => navigation.navigate('EventDetail', { id: e.id })} />)}
+          {list.length === 0 && <Text style={styles.empty}>No events match. Try clearing a filter.</Text>}
+        </>
+      )}
 
       <Pressable style={styles.area} onPress={() => Alert.alert('Change area', 'Coming soon.')}>
         <Ionicons name="location-outline" size={14} color={colors.muted} />
@@ -74,7 +101,7 @@ export default function ExploreScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  search: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 24, paddingHorizontal: 14, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
+  search: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: radii.pill, paddingHorizontal: 14, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
   searchInput: { flex: 1, paddingVertical: 12, marginLeft: 8, fontSize: 15, color: colors.text },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
   panel: { backgroundColor: '#fff', borderRadius: 14, padding: 12, marginBottom: 8 },
@@ -83,6 +110,13 @@ const styles = StyleSheet.create({
   heading: { fontSize: 17, fontWeight: '700', color: colors.text },
   count: { color: colors.muted, fontSize: 13 },
   empty: { textAlign: 'center', color: colors.muted, marginTop: 16 },
-  area: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 14 },
+  area: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginTop: 6, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.border, borderRadius: radii.pill },
+  segment: { flexDirection: 'row', backgroundColor: colors.chip, borderRadius: radii.pill, padding: 4, marginBottom: 4 },
+  segBtn: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: radii.pill },
+  segOn: { backgroundColor: colors.green },
+  segText: { fontWeight: '600', color: colors.text, fontSize: 13 },
+  segTextOn: { color: '#fff' },
+  mapWrap: { height: 460, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.chip, marginBottom: 12 },
+  mapEmpty: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(248, 249, 250, 0.88)' },
   areaText: { color: colors.muted, fontSize: 13 },
 });

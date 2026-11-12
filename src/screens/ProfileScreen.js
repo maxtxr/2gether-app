@@ -1,13 +1,10 @@
 import { useState } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, radii } from '../theme';
 import { receivedReviews } from '../data/mock';
 import { useApp } from '../context/AppContext';
-import Avatar, { initials } from '../components/Avatar';
-import Button from '../components/Button';
-import Chip from '../components/Chip';
-import Stars from '../components/Stars';
+import { Avatar, initials, Button, Chip, Stars } from '../components';
 
 export default function ProfileScreen({ navigation }) {
   const { user, updateProfile, joinedCount, hostedEvents, pastEvents, badges } = useApp();
@@ -112,7 +109,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 20, fontWeight: '800', color: colors.text },
   bio: { color: colors.muted, marginTop: 2 },
   since: { color: colors.muted, fontSize: 12, marginTop: 4 },
-  edit: { backgroundColor: '#fff', borderRadius: 10, padding: 8, marginBottom: 6, borderWidth: 1, borderColor: colors.border },
+  edit: { backgroundColor: '#fff', borderRadius: radii.pill, padding: 8, marginBottom: 6, borderWidth: 1, borderColor: colors.border },
   section: { fontWeight: '700', fontSize: 16, color: colors.text, marginTop: 20, marginBottom: 8 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap' },
   stats: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 14, padding: 14, marginTop: 14 },
@@ -128,6 +125,6 @@ const styles = StyleSheet.create({
   revHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   count: { color: colors.muted, fontSize: 13 },
   review: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8 },
-  settings: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 14, marginTop: 20, marginBottom: 20 },
+  settings: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: radii.pill, padding: 14, marginTop: 20, marginBottom: 20 },
   settingsText: { flex: 1, marginLeft: 10, fontWeight: '600', color: colors.text },
 });

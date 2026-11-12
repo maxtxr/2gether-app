@@ -1,6 +1,6 @@
 import { View, Text, Pressable, ScrollView, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
 
 const ROWS = [
@@ -44,7 +44,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: radii.pill, padding: 16, marginBottom: 8 },
   label: { flex: 1, fontWeight: '600', color: colors.text },
   value: { color: colors.muted, marginRight: 6 },
 });

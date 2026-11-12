@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet } from 'react-native';
-import { colors } from '../theme';
+import { colors, radii } from '../theme';
 import { CATEGORIES, LEVELS, ACCESSIBILITY } from '../data/options';
 import { useApp } from '../context/AppContext';
-import Chip from '../components/Chip';
-import Button from '../components/Button';
-import ConfirmModal from '../components/ConfirmModal';
+import { Chip, Button, ConfirmModal } from '../components';
 
 export default function CreateEventScreen({ navigation }) {
   const { createEvent } = useApp();
@@ -52,7 +50,7 @@ export default function CreateEventScreen({ navigation }) {
       <Text style={styles.label}>Accessibility</Text>
       <View style={styles.wrap}>{ACCESSIBILITY.map((a) => <Chip key={a} label={a} selected={access.includes(a)} onPress={() => toggleAccess(a)} />)}</View>
 
-      {field('Description', description, setDescription, { placeholder: 'Pace, what to bring, who it is for', multiline: true, style: [styles.input, { height: 90, textAlignVertical: 'top' }] })}
+      {field('Description', description, setDescription, { placeholder: 'Pace, what to bring, who it is for', multiline: true, style: [styles.input, { height: 90, textAlignVertical: 'top', borderRadius: 30 }] })}
 
       <View style={{ flexDirection: 'row' }}>
         <View style={{ flex: 1, marginRight: 8 }}>{field('Date', date, setDate, { placeholder: 'Tue 8 Nov' })}</View>
@@ -77,7 +75,7 @@ export default function CreateEventScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   label: { fontWeight: '700', color: colors.text, marginTop: 14, marginBottom: 6 },
-  input: { backgroundColor: '#fff', borderRadius: 12, padding: 12, fontSize: 15, color: colors.text, borderWidth: 1, borderColor: colors.border },
+  input: { backgroundColor: '#fff', borderRadius: radii.pill, padding: 12, fontSize: 15, color: colors.text, borderWidth: 1, borderColor: colors.border },
   wrap: { flexDirection: 'row', flexWrap: 'wrap' },
   hint: { textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 8 },
 });

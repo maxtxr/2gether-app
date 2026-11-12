@@ -2,10 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { colors } from '../theme';
 import { useApp } from '../context/AppContext';
-import EventCard from '../components/EventCard';
-import Stars from '../components/Stars';
-import Button from '../components/Button';
-import ConfirmModal from '../components/ConfirmModal';
+import { EventCard, Stars, Button, ConfirmModal } from '../components';
 
 export default function ReviewScreen({ route, navigation }) {
   const { events, reviews, addReview } = useApp();
@@ -39,6 +36,6 @@ export default function ReviewScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   label: { fontWeight: '700', color: colors.text, marginTop: 18, marginBottom: 8 },
-  input: { backgroundColor: '#fff', borderRadius: 12, padding: 12, minHeight: 130, textAlignVertical: 'top', fontSize: 15, borderWidth: 1, borderColor: colors.border },
+  input: { backgroundColor: '#fff', borderRadius: 30, padding: 12, minHeight: 130, textAlignVertical: 'top', fontSize: 15, borderWidth: 1, borderColor: colors.border },
   hint: { textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 8 },
 });
