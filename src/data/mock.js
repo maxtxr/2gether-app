@@ -46,18 +46,3 @@ export const seedEvents = [
     lat: 38.575, lng: -9.232, host: 'Sydney', capacity: 12, base: 9, people: [], accessibility: [], description: '',
   },
 ];
-
-export const seedNotifications = [
-  { id: 'n1', icon: 'chatbubble-outline', title: 'Maya sent a message', body: 'Padel Event: "Everything you\'ll need will be at the venue."', time: '09:15', group: 'Today', unread: true, eventId: 'e1' },
-  { id: 'n2', icon: 'alarm-outline', title: 'Cozy Walk is coming up', body: 'Tuesday, 09:00 at Parque da Paz. See you there!', time: '08:30', group: 'Today', unread: true, eventId: 'e2' },
-  { id: 'n3', icon: 'checkmark-circle-outline', title: "You're going!", body: 'You joined Sunday 5K Run. 11 participants are now going.', time: '16:42', group: 'Yesterday', unread: false, eventId: 'e3' },
-];
-
-export const seedChats = {
-  e1: [{ id: 'm1', from: 'Maya', text: 'Hey! Ask me anything about the event.', time: '09:12' }],
-};
-
-export const receivedReviews = [
-  { id: 'r1', author: 'Maya', rating: 5, text: 'Friendly, on time and always up for a game!' },
-  { id: 'r2', author: 'Paul', rating: 5, text: 'Great energy, welcomed the new people.' },
-];

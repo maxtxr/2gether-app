@@ -13,9 +13,40 @@ import { supabase } from '../../lib/supabase';
 
 const AppContext = createContext(null);
 
-let counter = 100;
-const uid = () => String(counter++);
-const nowTime = () => new Date().toTimeString().slice(0, 5);
+function getEventDate(event) {
+  const value = event?.when || event?.date;
+  if (!value) return null;
+
+  const match = String(value).match(
+    /^(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})$/
+  );
+
+  if (match) {
+    const [, day, month, year, hour, minute] = match;
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute)
+    );
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function eventHasEnded(event) {
+  const date = getEventDate(event);
+  if (!date) return !!event?.past;
+  return date < new Date();
+}
+
+function avatarPublicUrl(avatarPath) {
+  if (!avatarPath) return null;
+  const { data } = supabase.storage.from('avatars').getPublicUrl(avatarPath);
+  return data?.publicUrl || null;
+}
 
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -42,6 +73,8 @@ export function AppProvider({ children }) {
       email: authUser.email,
       bio: profile?.bio || 'New to 2Gether!',
       interests: profile?.interests || [],
+      avatarPath: profile?.avatar_path || null,
+      avatarUrl: avatarPublicUrl(profile?.avatar_path),
       since: new Date(
         profile?.created_at || authUser.created_at
       ).toLocaleDateString('en-US', {
@@ -67,11 +100,20 @@ export function AppProvider({ children }) {
   const loadProfile = async (authUser) => {
     if (!authUser) return null;
 
-    const { data: profile, error } = await supabase
+    let { data: profile, error } = await supabase
       .from('profiles')
-      .select('name, bio, interests, created_at')
+      .select('name, bio, interests, created_at, avatar_path')
       .eq('id', authUser.id)
       .maybeSingle();
+
+    // Fallback if avatar_path column is not in the DB yet
+    if (error && /avatar_path/i.test(error.message || '')) {
+      ({ data: profile, error } = await supabase
+        .from('profiles')
+        .select('name, bio, interests, created_at')
+        .eq('id', authUser.id)
+        .maybeSingle());
+    }
 
     if (error) {
       console.error('Error loading profile:', error.message);
@@ -152,7 +194,8 @@ export function AppProvider({ children }) {
       }
 
       if (mounted) {
-        setEvents([...seedEvents, ...data]);
+        // Only real Supabase events when logged in — seed IDs (e1, e2…) are not UUIDs
+        setEvents(data ?? []);
       }
     };
 
@@ -526,6 +569,7 @@ export function AppProvider({ children }) {
     if (patch.name !== undefined) updates.name = patch.name;
     if (patch.bio !== undefined) updates.bio = patch.bio;
     if (patch.interests !== undefined) updates.interests = patch.interests;
+    if (patch.avatar_path !== undefined) updates.avatar_path = patch.avatar_path;
 
     if (Object.keys(updates).length === 0) return;
 
@@ -533,14 +577,13 @@ export function AppProvider({ children }) {
       .from('profiles')
       .update(updates)
       .eq('id', user.id)
-      .select('name, bio, interests, created_at')
+      .select('name, bio, interests, created_at, avatar_path')
       .single();
 
     if (error) throw error;
 
-    setUser((currentUser) => ({
-      ...currentUser,
-      ...mapUser(
+    setUser((currentUser) => {
+      const mapped = mapUser(
         {
           id: currentUser.id,
           email: currentUser.email,
@@ -548,50 +591,85 @@ export function AppProvider({ children }) {
           user_metadata: { name: currentUser.name },
         },
         data
-      ),
-    }));
+      );
+
+      // Bust cache when the same storage path is reused
+      if (mapped.avatarUrl && updates.avatar_path) {
+        mapped.avatarUrl = `${mapped.avatarUrl}?t=${Date.now()}`;
+      }
+
+      return { ...currentUser, ...mapped };
+    });
+  };
+
+  // Upload da imagem de perfil
+  const uploadAvatar = async (imageUri) => {
+    if (!user) {
+      throw new Error('You must be logged in to update your photo.');
+    }
+
+    if (!imageUri) {
+      throw new Error('No image selected.');
+    }
+
+    const response = await fetch(imageUri);
+
+    if (!response.ok) {
+      throw new Error('Could not read the selected image.');
+    }
+
+    const imageBlob = await response.blob();
+    const imagePath = `${user.id}/avatar.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(imagePath, imageBlob, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
+    if (uploadError) throw uploadError;
+
+    await updateProfile({ avatar_path: imagePath });
   };
 
   // ---------------- NOTIFICATIONS ----------------
 
   const pushNotification = async (notification) => {
-    console.log('1. pushNotification chamada');
-    console.log('Utilizador:', user?.id);
-    console.log('Notificação:', notification);
-
     if (!user) {
       console.error('ERRO: Não existe utilizador autenticado.');
       return;
     }
 
+    const targetUserId = notification.userId || user.id;
+
     const { data, error } = await supabase
       .from('notifications')
       .insert({
-        user_id: user.id,
+        user_id: targetUserId,
         title: notification.title,
         message: notification.message,
         type: notification.type || 'general',
         read: false,
+        event_id: notification.eventId || null,
+        conversation_id: notification.conversationId || null,
       })
       .select()
       .single();
 
     if (error) {
-      console.error('2. ERRO SUPABASE:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
+      console.error('Notification insert failed:', error.message);
       throw error;
     }
 
-    console.log('3. NOTIFICAÇÃO CRIADA:', data);
+    if (targetUserId === user.id) {
+      setNotifications((current) => [
+        mapNotification(data),
+        ...current,
+      ]);
+    }
 
-    setNotifications((current) => [
-      mapNotification(data),
-      ...current,
-    ]);
+    return data;
   };
 
   const markAllRead = async () => {
@@ -717,6 +795,22 @@ export function AppProvider({ children }) {
         user.id,
       ],
     }));
+
+    const event = events.find((e) => e.id === eventId);
+
+    if (event?.host_id && event.host_id !== user.id) {
+      try {
+        await pushNotification({
+          userId: event.host_id,
+          title: 'Someone joined your event',
+          message: `${user.name} joined "${event.title}".`,
+          type: 'event',
+          eventId,
+        });
+      } catch (notifyError) {
+        console.error('Could not notify host:', notifyError.message);
+      }
+    }
   };
 
 
@@ -744,6 +838,33 @@ export function AppProvider({ children }) {
         (id) => id !== user.id
       ),
     }));
+
+    const event = events.find((e) => e.id === eventId);
+
+    try {
+      const { data: waitlist, error: waitlistError } = await supabase
+        .from('event_waitlist')
+        .select('user_id')
+        .eq('event_id', eventId);
+
+      if (waitlistError) throw waitlistError;
+
+      await Promise.all(
+        (waitlist || [])
+          .filter((entry) => entry.user_id !== user.id)
+          .map((entry) =>
+            pushNotification({
+              userId: entry.user_id,
+              title: 'Spot available',
+              message: `A spot opened up in "${event?.title || 'an event'}". Join now!`,
+              type: 'event',
+              eventId,
+            })
+          )
+      );
+    } catch (notifyError) {
+      console.error('Could not notify waitlist:', notifyError.message);
+    }
   };
 
   // Criar evento
@@ -844,6 +965,7 @@ export function AppProvider({ children }) {
       title: 'Event created',
       message: `Your event "${finalEvent.title}" has been created.`,
       type: 'event',
+      eventId: finalEvent.id,
     });
 
     console.log('6. Notificação criada');
@@ -1163,13 +1285,41 @@ export function AppProvider({ children }) {
       ],
     }));
 
+    try {
+      const { data: conversation, error: conversationError } = await supabase
+        .from('conversations')
+        .select('host_id, participant_id, event_id')
+        .eq('id', conversationId)
+        .single();
+
+      if (conversationError) throw conversationError;
+
+      const recipientId =
+        conversation.host_id === user.id
+          ? conversation.participant_id
+          : conversation.host_id;
+
+      if (recipientId && recipientId !== user.id) {
+        await pushNotification({
+          userId: recipientId,
+          title: 'New message',
+          message: `${user.name}: ${trimmedMessage.slice(0, 80)}`,
+          type: 'message',
+          eventId: conversation.event_id,
+          conversationId,
+        });
+      }
+    } catch (notifyError) {
+      console.error('Could not notify message recipient:', notifyError.message);
+    }
+
     return data;
   };
 
   // ---------------- DERIVED DATA ----------------
 
   const pastEvents = events.filter(
-    (event) => new Date(event.date) < new Date()
+    (event) => goingIds.includes(event.id) && eventHasEnded(event)
   );
 
   const unreadCount = notifications.filter(
@@ -1182,15 +1332,57 @@ export function AppProvider({ children }) {
     (e) => e.host_id === user?.id
   );
 
-  const badges = useMemo(() => {
-    const result = [];
+  const receivedReviews = useMemo(() => {
+    const hostedIdSet = new Set(hostedIds);
 
-    if (joinedCount >= 1) result.push('First Event');
-    if (joinedCount >= 5) result.push('Social Butterfly');
-    if (hostedEvents.length >= 1) result.push('Host');
+    return Object.values(reviews || {})
+      .flat()
+      .filter(
+        (review) =>
+          hostedIdSet.has(review.eventId) && review.userId !== user?.id
+      )
+      .sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      );
+  }, [reviews, hostedIds, user?.id]);
 
-    return result;
-  }, [joinedCount, hostedEvents]);
+  const averageRating = useMemo(() => {
+    if (receivedReviews.length === 0) return null;
+
+    const total = receivedReviews.reduce(
+      (sum, review) => sum + (Number(review.rating) || 0),
+      0
+    );
+
+    return Math.round((total / receivedReviews.length) * 10) / 10;
+  }, [receivedReviews]);
+
+  const badges = useMemo(
+    () => [
+      {
+        id: 'first-event',
+        name: 'First Event',
+        icon: '🎉',
+        hint: 'Join 1 event',
+        earned: joinedCount >= 1,
+      },
+      {
+        id: 'social-butterfly',
+        name: 'Social Butterfly',
+        icon: '🦋',
+        hint: 'Join 5 events',
+        earned: joinedCount >= 5,
+      },
+      {
+        id: 'host',
+        name: 'Host',
+        icon: '⭐',
+        hint: 'Host 1 event',
+        earned: hostedEvents.length >= 1,
+      },
+    ],
+    [joinedCount, hostedEvents.length]
+  );
 
   // ---------------- CONTEXT VALUE ----------------
 
@@ -1201,6 +1393,7 @@ export function AppProvider({ children }) {
     signUp,
     logout,
     updateProfile,
+    uploadAvatar,
 
     events,
     setEvents,
@@ -1235,6 +1428,8 @@ export function AppProvider({ children }) {
     joinedCount,
     hostedEvents,
     badges,
+    receivedReviews,
+    averageRating,
   };
 
   return (
