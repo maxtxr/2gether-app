@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, levelColors } from '../theme';
 import { useApp } from '../context/AppContext';
 import { Avatar, initials, Button, ConfirmModal, AccessibilityBadge } from '../components';
 
 export default function EventDetailScreen({ route, navigation }) {
-  const { events, goingIds, hostedIds, countOf, spotsLeft, joinEvent, leaveEvent } = useApp();
+  const {events, goingIds, hostedIds, user, countOf, spotsLeft, joinEvent, leaveEvent, getOrCreateConversation,} = useApp();
   const event = events.find((e) => e.id === route.params.id);
   const [modal, setModal] = useState(null);
 
@@ -84,9 +84,34 @@ export default function EventDetailScreen({ route, navigation }) {
         </>
       )}
 
-      <Button title="Message organizer" variant="outline" icon="chatbubble-outline"
-        onPress={() => navigation.navigate('Chat', { id: event.id })} style={{ marginTop: 10 }} />
-      {!going && !hosting && !event.past && <Text style={styles.hint}>You can message the organizer before joining.</Text>}
+      {event.host_id && user && (
+        <Button
+          title={event.host_id === user.id ? 'View chats' : 'Message organizer'}
+          variant="outline"
+          icon="chatbubble-outline"
+          onPress={async () => {
+            try {
+              if (event.host_id === user.id) {
+                navigation.navigate('EventChats', {
+                  eventId: event.id,
+                });
+              } else {
+                const conversation = await getOrCreateConversation(event.id);
+
+                navigation.navigate('Chat', {
+                  conversationId: conversation.id,
+                  eventId: event.id,
+                  otherName: event.host,
+                });
+              }
+            } catch (error) {
+              Alert.alert('Chat error', error.message);
+            }
+          }}
+          style={{ marginTop: 10 }}
+        />
+      )}
+
 
       <ConfirmModal visible={!!modal} message={modal} onConfirm={() => setModal(null)} />
     </ScrollView>

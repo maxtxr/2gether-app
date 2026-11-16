@@ -25,8 +25,8 @@ export default function LoginScreen({ navigation }) {
 
   const passwordInputRef = useRef(null);
 
-  const handleLogin = async () => {
-    const trimmedEmail = email.trim();
+const handleLogin = async () => {
+  const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
       setError('Please enter your email and password.');
       return;
@@ -40,11 +40,13 @@ export default function LoginScreen({ navigation }) {
     }
 
     setError('');
+
     try {
       setIsSubmitting(true);
-      login(trimmedEmail);
-    } catch {
-      setError('Unable to sign in. Please try again.');
+      await login(trimmedEmail, password);
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.message || 'Unable to sign in. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

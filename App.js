@@ -1,3 +1,4 @@
+
 import { View, Alert, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -23,6 +24,7 @@ import ChatScreen from './src/screens/ChatScreen';
 import CreateEventScreen from './src/screens/CreateEventScreen';
 import ReviewScreen from './src/screens/ReviewScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import EventChatsScreen from './src/screens/EventChatsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -63,27 +65,39 @@ const headerOptions = {
 function Tabs() {
   const { unreadCount } = useApp();
   const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => {
         const t = TABS[route.name];
+
         return {
           ...headerOptions,
           headerTitle: () => <Logo />,
           tabBarLabel: t.label,
           tabBarActiveTintColor: '#fff',
           tabBarInactiveTintColor: '#B9CFC5',
-          // The library treats `height` as the FULL bar height and carves the
-          // safe-area inset out of it, so add the inset or icons get clipped
-          // on phones with a home indicator / gesture bar.
-          tabBarStyle: { backgroundColor: colors.green, borderTopWidth: 0, height: 66 + insets.bottom, paddingTop: 6 },
+          tabBarStyle: {
+            backgroundColor: colors.green,
+            borderTopWidth: 0,
+            height: 66 + insets.bottom,
+            paddingTop: 6,
+          },
           tabBarLabelStyle: { fontSize: 11 },
           tabBarIcon: ({ focused, color }) => (
-            <View style={{
-              paddingHorizontal: 14, paddingVertical: 3, borderRadius: 14,
-              backgroundColor: focused ? colors.greenLight : 'transparent',
-            }}>
-              <Ionicons name={focused ? t.iconOn : t.icon} size={22} color={color} />
+            <View
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 3,
+                borderRadius: 14,
+                backgroundColor: focused ? colors.greenLight : 'transparent',
+              }}
+            >
+              <Ionicons
+                name={focused ? t.iconOn : t.icon}
+                size={22}
+                color={color}
+              />
             </View>
           ),
         };
@@ -92,9 +106,7 @@ function Tabs() {
       <Tab.Screen name="ForYou" component={ForYouScreen} />
       <Tab.Screen name="Search" component={ExploreScreen} />
       <Tab.Screen name="MyEvents" component={MyEventsScreen} />
-      <Tab.Screen
-        name="Notifications"
-        component={NotificationsScreen}
+      <Tab.Screen name="Notifications" component={NotificationsScreen}
         options={{ tabBarBadge: unreadCount > 0 ? unreadCount : undefined }}
       />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -103,18 +115,59 @@ function Tabs() {
 }
 
 function Root() {
-  const { user } = useApp();
+  // Obter o utilizador e o estado de carregamento do Supabase
+  const { user, authLoading } = useApp();
+
+  // Esperar pela verificação da sessão antes de mostrar os ecrãs
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.green }}>
+        <StatusBar style="light" />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
       <StatusBar style="light" />
+
       {user ? (
         <Stack.Navigator screenOptions={headerOptions}>
-          <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
-          <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
-          <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Group chat' }} />
-          <Stack.Screen name="CreateEvent" component={CreateEventScreen} options={{ title: 'Create event' }} />
-          <Stack.Screen name="Review" component={ReviewScreen} options={{ title: 'Review' }} />
-          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+          <Stack.Screen
+            name="Tabs"
+            component={Tabs}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="EventDetail"
+            component={EventDetailScreen}
+            options={{ title: 'Event' }}
+          />
+          <Stack.Screen
+            name="EventChats"
+            component={EventChatsScreen}
+            options={{ title: 'Event chats' }}
+          />
+          <Stack.Screen
+            name="Chat"
+            component={ChatScreen}
+            options={{ title: 'Group chat' }}
+          />
+          <Stack.Screen
+            name="CreateEvent"
+            component={CreateEventScreen}
+            options={{ title: 'Create event' }}
+          />
+          <Stack.Screen
+            name="Review"
+            component={ReviewScreen}
+            options={{ title: 'Review' }}
+          />
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{ title: 'Settings' }}
+          />
         </Stack.Navigator>
       ) : (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -127,9 +180,9 @@ function Root() {
 }
 
 export default function App() {
-  // Preload the icon font up front so tab/header/button icons are guaranteed
-  // to render (icons can show up blank on device while the font is loading).
+  // Preload the icon font up front
   const [fontsLoaded, fontError] = useFonts(Ionicons.font);
+
   if (!fontsLoaded && !fontError) {
     return <View style={{ flex: 1, backgroundColor: colors.green }} />;
   }

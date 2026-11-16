@@ -8,6 +8,7 @@ import {
   ScrollView,
   Platform,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../theme';
@@ -36,6 +37,7 @@ export default function SignUpScreen({ navigation }) {
     }
 
     const emailRegex = /\S+@\S+\.\S+/;
+
     if (!emailRegex.test(trimmedEmail)) {
       setError('Please enter a valid email address (e.g. name@example.com).');
       return;
@@ -47,16 +49,34 @@ export default function SignUpScreen({ navigation }) {
     }
 
     setError('');
+
     try {
       setIsSubmitting(true);
-      signUp(trimmedName, trimmedEmail);
-    } catch {
-      setError('Could not create account. Please try again.');
+
+      await signUp(
+        trimmedName,
+        trimmedEmail,
+        password
+      );
+
+      Alert.alert(
+        'Account created!',
+        'Your account was created successfully. Please log in.',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('Login'),
+          },
+        ]
+      );
+
+    } catch (err) {
+      console.error('Signup error:', err);
+      setError(err.message || 'Could not create account. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
-  };
-
+  }
   return (
     <KeyboardAvoidingView
       style={styles.keyboardContainer}

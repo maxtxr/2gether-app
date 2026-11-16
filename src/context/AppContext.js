@@ -1,5 +1,14 @@
-import { createContext, useContext, useMemo, useState } from 'react';
-import { seedEvents, seedNotifications, seedChats } from '../data/mock';
+import {
+  createContext,
+  useContext,
+  useRef,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
+import { seedEvents } from '../data/mock';
+import { supabase } from '../../lib/supabase';
 
 const AppContext = createContext(null);
 
@@ -9,96 +18,889 @@ const nowTime = () => new Date().toTimeString().slice(0, 5);
 
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [events, setEvents] = useState(seedEvents);
-  const [goingIds, setGoingIds] = useState(['e3']);
+  const [goingIds, setGoingIds] = useState([]);
   const [hostedIds, setHostedIds] = useState([]);
   const [reviews, setReviews] = useState({});
-  const [notifications, setNotifications] = useState(seedNotifications);
-  const [chats, setChats] = useState(seedChats);
+  const [notifications, setNotifications] = useState([]);
+  const [chats, setChats] = useState({});
 
-  const login = (email) =>
-    setUser({ name: 'Alex Morgan', email, bio: 'Here for good games and new friends.', interests: ['Padel', 'Outdoors', 'Board games'], since: 'Nov 2026' });
-  const signUp = (name, email) =>
-    setUser({ name, email, bio: 'New to 2Gether!', interests: [], since: 'Nov 2026' });
-  const logout = () => setUser(null);
-  const updateProfile = (patch) => setUser((u) => ({ ...u, ...patch }));
+  const isSigningUp = useRef(false);
 
-  const pushNotification = (n) =>
-    setNotifications((prev) => [{ id: uid(), unread: true, group: 'Today', time: nowTime(), ...n }, ...prev]);
-  const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
-  const markRead = (id) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, unread: false } : n)));
-  const deleteNotification = (id) => setNotifications((prev) => prev.filter((n) => n.id !== id));
-  const clearNotifications = () => setNotifications([]);
+  // ---------------- AUTHENTICATION ----------------
 
-  const countOf = (e) => e.base + (goingIds.includes(e.id) ? 1 : 0);
-  const spotsLeft = (e) => e.capacity - countOf(e);
+  // Converter os dados do Supabase para o formato usado pela app
+  const mapUser = (authUser, profile = null) => {
+    if (!authUser) return null;
 
-  const joinEvent = (id) => {
-    const e = events.find((x) => x.id === id);
-    setGoingIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    pushNotification({
-      icon: 'checkmark-circle-outline', title: "You're going!", eventId: id,
-      body: `You joined ${e.title}. ${e.base + 1} participants are now going.`,
+    return {
+      id: authUser.id,
+      name: profile?.name || authUser.user_metadata?.name || 'New User',
+      email: authUser.email,
+      bio: profile?.bio || 'New to 2Gether!',
+      interests: profile?.interests || [],
+      since: new Date(
+        profile?.created_at || authUser.created_at
+      ).toLocaleDateString('en-US', {
+        month: 'short',
+        year: 'numeric',
+      }),
+    };
+  };
+
+  const mapNotification = (notification) => ({
+    id: notification.id,
+    title: notification.title,
+    message: notification.message,
+    type: notification.type,
+    read: notification.read,
+    createdAt: notification.created_at,
+    conversationId: notification.conversation_id,
+    eventId: notification.event_id,
+    messageCount: notification.message_count || 1,
+  });
+
+
+  // Carregar o perfil da tabela profiles
+  const loadProfile = async (authUser) => {
+    if (!authUser) return null;
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('name, bio, interests, created_at')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error loading profile:', error.message);
+
+      const fallbackUser = mapUser(authUser);
+      setUser(fallbackUser);
+      return fallbackUser;
+    }
+
+    const mappedUser = mapUser(authUser, profile);
+
+    setUser(mappedUser);
+
+    return mappedUser;
+  };
+
+  // Verificar se já existe uma sessão iniciada
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+
+      if (error) {
+        console.error('Error getting session:', error.message);
+        setUser(null);
+      } else if (data.session?.user) {
+        await loadProfile(data.session.user);
+      } else {
+        setUser(null);
+      }
+
+      if (mounted) {
+        setAuthLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // Detetar alterações na autenticação
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (isSigningUp.current) return;
+
+      // Quando a sessão termina, limpar o utilizador
+      if (!session) {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Carregar eventos do Supabase
+  useEffect(() => {
+    let mounted = true;
+
+    const loadEvents = async () => {
+      if (!user) {
+        setEvents(seedEvents);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading events:', error.message);
+        return;
+      }
+
+      if (mounted) {
+        setEvents([...seedEvents, ...data]);
+      }
+    };
+
+    loadEvents();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
+
+  // Carregar participações do utilizador
+  useEffect(() => {
+    let mounted = true;
+
+    const loadGoingEvents = async () => {
+      if (!user) {
+        setGoingIds([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('event_participants')
+        .select('event_id')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error loading participations:', error.message);
+        return;
+      }
+
+      if (mounted) {
+        setGoingIds(data.map((participation) => participation.event_id));
+      }
+    };
+
+    loadGoingEvents();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
+
+  // Carregar notificações do utilizador
+  useEffect(() => {
+    let mounted = true;
+
+    const loadNotifications = async () => {
+      if (!user) {
+        setNotifications([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading notifications:', error.message);
+        return;
+      }
+
+      if (mounted) {
+        setNotifications(data.map(mapNotification));
+      }
+    };
+
+    loadNotifications();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
+
+  // Receber e atualizar notificações em tempo real
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (
+            payload.eventType === 'INSERT' ||
+            payload.eventType === 'UPDATE'
+          ) {
+            const updatedNotification = mapNotification(payload.new);
+
+            setNotifications((current) => {
+              const exists = current.some(
+                (n) => n.id === updatedNotification.id
+              );
+
+              if (exists) {
+                return current.map((n) =>
+                  n.id === updatedNotification.id
+                    ? updatedNotification
+                    : n
+                );
+              }
+
+              return [updatedNotification, ...current];
+            });
+          }
+
+          if (payload.eventType === 'DELETE') {
+            setNotifications((current) =>
+              current.filter((n) => n.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  // Login
+  const login = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) throw error;
+
+    await loadProfile(data.user);
+
+    return data.user;
+  };
+
+  // Registo
+  const signUp = async (name, email, password) => {
+    isSigningUp.current = true;
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.session) {
+        const { error: logoutError } = await supabase.auth.signOut();
+
+        if (logoutError) throw logoutError;
+      }
+
+      return data.user;
+
+    } finally {
+      isSigningUp.current = false;
+    }
+  };
+
+  // Logout
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) throw error;
+
+    setUser(null);
+  };
+
+  // Atualizar perfil
+  const updateProfile = async (patch) => {
+    if (!user) return;
+
+    // Só enviar os campos que foram alterados
+    const updates = {};
+
+    if (patch.name !== undefined) updates.name = patch.name;
+    if (patch.bio !== undefined) updates.bio = patch.bio;
+    if (patch.interests !== undefined) updates.interests = patch.interests;
+
+    if (Object.keys(updates).length === 0) return;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id)
+      .select('name, bio, interests, created_at')
+      .single();
+
+    if (error) throw error;
+
+    // Atualizar também os dados na aplicação
+    setUser((currentUser) => ({
+      ...currentUser,
+      ...mapUser(
+        {
+          id: currentUser.id,
+          email: currentUser.email,
+          created_at: currentUser.created_at,
+          user_metadata: { name: currentUser.name },
+        },
+        data
+      ),
+    }));
+  };
+
+  // ---------------- NOTIFICATIONS ----------------
+
+  const pushNotification = async (notification) => {
+    console.log('1. pushNotification chamada');
+    console.log('Utilizador:', user?.id);
+    console.log('Notificação:', notification);
+
+    if (!user) {
+      console.error('ERRO: Não existe utilizador autenticado.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: user.id,
+        title: notification.title,
+        message: notification.message,
+        type: notification.type || 'general',
+        read: false,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('2. ERRO SUPABASE:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw error;
+    }
+
+    console.log('3. NOTIFICAÇÃO CRIADA:', data);
+
+    setNotifications((current) => [
+      mapNotification(data),
+      ...current,
+    ]);
+  };
+
+  const markAllRead = async () => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('read', false);
+
+    if (error) {
+      console.error('Error marking notifications as read:', error.message);
+      throw error;
+    }
+
+    setNotifications((current) =>
+      current.map((notification) => ({
+        ...notification,
+        read: true,
+      }))
+    );
+  };
+
+  const markRead = async (id) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error marking notification as read:', error.message);
+      throw error;
+    }
+
+    setNotifications((current) =>
+      current.map((notification) =>
+        notification.id === id
+          ? { ...notification, read: true }
+          : notification
+      )
+    );
+  };
+
+  const deleteNotification = async (id) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error deleting notification:', error.message);
+      throw error;
+    }
+
+    setNotifications((current) =>
+      current.filter((notification) => notification.id !== id)
+    );
+  };
+
+  const clearNotifications = async () => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error clearing notifications:', error.message);
+      throw error;
+    }
+
+    setNotifications([]);
+  };
+
+  // ---------------- EVENTS ----------------
+
+  const countOf = (event) => {
+    return event.attendees?.length || 0;
+  };
+
+  const spotsLeft = (event) => {
+    return Math.max(0, event.capacity - countOf(event));
+  };
+
+  const joinEvent = async (eventId) => {
+    if (!user) {
+      throw new Error('You must be logged in to join an event.');
+    }
+
+    if (goingIds.includes(eventId)) return;
+
+    const { error } = await supabase
+      .from('event_participants')
+      .insert({
+        event_id: eventId,
+        user_id: user.id,
+      });
+
+    if (error) throw error;
+
+    setGoingIds((current) =>
+      current.includes(eventId) ? current : [...current, eventId]
+    );
+  };
+
+  const leaveEvent = async (eventId) => {
+    if (!user) {
+      throw new Error('You must be logged in to leave an event.');
+    }
+
+    const { error } = await supabase
+      .from('event_participants')
+      .delete()
+      .eq('event_id', eventId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    setGoingIds((current) =>
+      current.filter((id) => id !== eventId)
+    );
+  };
+
+  
+  const createEvent = async (eventData) => {
+    if (!user) {
+      throw new Error('You must be logged in to create an event.');
+    }
+
+    console.log('1. A criar evento...');
+
+    const newEvent = {
+      ...eventData,
+      host: user.name,
+      host_id: user.id,
+      short: eventData.when,
+      base: 0,
+      people: [],
+    };
+
+    const { data, error } = await supabase
+      .from('events')
+      .insert(newEvent)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log('2. Evento criado:', data);
+
+    setEvents((current) => [data, ...current]);
+    console.log('3. Eventos atualizados');
+
+    setHostedIds((current) => [...current, data.id]);
+    console.log('4. HostedIds atualizado');
+
+    await pushNotification({
+      title: 'Event created',
+      message: `Your event "${data.title}" has been created.`,
+      type: 'event',
+    });
+
+    console.log('5. Notificação criada');
+
+    return data;
+  };
+
+  // ---------------- REVIEWS ----------------
+
+  const addReview = (eventId, review) => {
+    setReviews((current) => ({
+      ...current,
+      [eventId]: [
+        ...(current[eventId] || []),
+        {
+          id: uid(),
+          ...review,
+          author: user?.name || 'Unknown',
+        },
+      ],
+    }));
+  };
+
+  // ---------------- CHATS ----------------
+
+  // Criar ou recuperar uma conversa associada a um evento
+  const getOrCreateConversation = async (eventId) => {
+    if (!user) {
+      throw new Error('You must be logged in to start a conversation.');
+    }
+
+    const event = events.find((e) => e.id === eventId);
+
+    if (!event || !event.host_id) {
+      throw new Error('This event is not available for messaging.');
+    }
+
+    if (event.host_id === user.id) {
+      throw new Error('You cannot message yourself.');
+    }
+
+    const { data: existingConversation, error: searchError } =
+      await supabase
+        .from('conversations')
+        .select('*')
+        .eq('event_id', eventId)
+        .eq('participant_id', user.id)
+        .maybeSingle();
+
+    if (searchError) throw searchError;
+
+    if (existingConversation) {
+      return existingConversation;
+    }
+
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert({
+        event_id: eventId,
+        host_id: event.host_id,
+        participant_id: user.id,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      // Se a conversa já tiver sido criada entretanto, recuperá-la
+      if (error.code === '23505') {
+        const { data: conversation, error: retryError } =
+          await supabase
+            .from('conversations')
+            .select('*')
+            .eq('event_id', eventId)
+            .eq('participant_id', user.id)
+            .single();
+
+        if (retryError) throw retryError;
+        return conversation;
+      }
+
+      throw error;
+    }
+
+    return data;
+  };
+
+
+  // Carregar todas as conversas de um evento (para o organizador)
+  const loadEventConversations = async (eventId) => {
+    if (!user) {
+      throw new Error('You must be logged in.');
+    }
+
+    const { data: conversations, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!conversations || conversations.length === 0) {
+      return [];
+    }
+
+    const participantIds = [
+      ...new Set(conversations.map((c) => c.participant_id)),
+    ];
+
+    const conversationIds = conversations.map((c) => c.id);
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, name')
+      .in('id', participantIds);
+
+    if (profilesError) throw profilesError;
+
+    const { data: messages, error: messagesError } = await supabase
+      .from('messages')
+      .select('conversation_id, content, created_at, sender_id, read_at')
+      .in('conversation_id', conversationIds)
+      .order('created_at', { ascending: false });
+
+    if (messagesError) throw messagesError;
+
+    return conversations.map((conversation) => {
+      const participant = profiles.find(
+        (p) => p.id === conversation.participant_id
+      );
+
+      const conversationMessages = messages.filter(
+        (m) => m.conversation_id === conversation.id
+      );
+
+      const lastMessage = conversationMessages[0];
+
+      const unreadCount = conversationMessages.filter(
+        (m) => m.sender_id !== user.id && m.read_at === null
+      ).length;
+
+      return {
+        ...conversation,
+        participantName: participant?.name || 'Participant',
+        lastMessage: lastMessage?.content || 'No messages yet',
+        lastMessageAt: lastMessage?.created_at || conversation.created_at,
+        unreadCount,
+      };
     });
   };
-  const leaveEvent = (id) => setGoingIds((prev) => prev.filter((x) => x !== id));
 
-  const createEvent = (data) => {
-    const id = uid();
-    const e = {
-      ...data, id, host: user.name, base: 1, people: [], short: data.when, address: '',
-      area: data.place,
-      // No geocoding in this prototype — new events land near central Lisbon.
-      lat: 38.71, lng: -9.13,
+
+  // Carregar mensagens de uma conversa
+  const loadMessages = async (conversationId) => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error loading messages:', error.message);
+      throw error;
+    }
+
+    const mappedMessages = data.map((message) => ({
+      id: message.id,
+      text: message.content,
+      from: message.sender_id === user.id ? 'me' : 'other',
+      time: new Date(message.created_at).toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    }));
+
+    setChats((current) => ({
+      ...current,
+      [conversationId]: mappedMessages,
+    }));
+
+    return mappedMessages;
+  };
+
+  // Marcar como lidas as mensagens recebidas numa conversa
+  const markConversationRead = async (conversationId) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('conversation_id', conversationId)
+      .neq('sender_id', user.id)
+      .is('read_at', null);
+
+    if (error) {
+      console.error('Error marking messages as read:', error.message);
+      throw error;
+    }
+  };
+
+  // Enviar uma mensagem
+  const sendMessage = async (conversationId, message) => {
+    if (!user) {
+      throw new Error('You must be logged in to send messages.');
+    }
+
+    const trimmedMessage = message.trim();
+
+    if (!trimmedMessage) return;
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        content: trimmedMessage,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error sending message:', error.message);
+      throw error;
+    }
+
+    const newMessage = {
+      id: data.id,
+      text: data.content,
+      from: 'me',
+      time: new Date(data.created_at).toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
     };
-    setEvents((prev) => [e, ...prev]);
-    setHostedIds((prev) => [...prev, id]);
-    ['Maya', 'João', 'Sofia'].forEach((name, i) =>
-      setTimeout(() => pushNotification({
-        icon: 'person-add-outline', title: `${name} joined your event`, eventId: id,
-        body: `${name} is going to ${data.title}.`,
-      }), 4000 + i * 1500)
-    );
-    return id;
+
+    setChats((current) => ({
+      ...current,
+      [conversationId]: [
+        ...(current[conversationId] || []),
+        newMessage,
+      ],
+    }));
+
+    return data;
   };
 
-  const addReview = (id, rating, text) => setReviews((prev) => ({ ...prev, [id]: { rating, text } }));
 
-  const sendMessage = (eventId, text) => {
-    setChats((prev) => ({ ...prev, [eventId]: [...(prev[eventId] || []), { id: uid(), from: 'me', text, time: nowTime() }] }));
-    const e = events.find((x) => x.id === eventId);
-    setTimeout(() => {
-      setChats((prev) => ({
-        ...prev,
-        [eventId]: [...(prev[eventId] || []), {
-          id: uid(), from: e?.host || 'Host', time: nowTime(),
-          text: e?.autoReply || 'Thanks for your message! See you there.',
-        }],
-      }));
-    }, 1500);
-  };
+  // ---------------- DERIVED DATA ----------------
 
-  const pastEvents = events.filter((e) => e.past);
-  const unreadCount = notifications.filter((n) => n.unread).length;
-  const joinedCount = pastEvents.length + goingIds.length;
-  const hostedEvents = events.filter((e) => hostedIds.includes(e.id));
+  const pastEvents = events.filter(
+    (event) => new Date(event.date) < new Date()
+  );
 
-  const badges = useMemo(() => [
-    { id: 'first', icon: '👟', name: 'First steps', hint: 'Join your first event', earned: joinedCount >= 1 },
-    { id: 'social', icon: '🦋', name: 'Social butterfly', hint: 'Join 3 events', earned: joinedCount >= 3 },
-    { id: 'host', icon: '📣', name: 'Organizer', hint: 'Create an event', earned: hostedEvents.length >= 1 },
-    { id: 'inclusive', icon: '🤝', name: 'Inclusive host', hint: 'Host an accessible event', earned: hostedEvents.some((e) => e.accessibility.length > 0) },
-    { id: 'reviewer', icon: '⭐', name: 'Reviewer', hint: 'Review a past event', earned: Object.keys(reviews).length >= 1 },
-  ], [joinedCount, hostedEvents.length, reviews]);
+  const unreadCount = notifications.filter(
+    (notification) => !notification.read
+  ).length;
+
+  const joinedCount = goingIds.length;
+
+  const hostedEvents = events.filter(
+  (e) => e.host_id === user?.id
+);
+
+  const badges = useMemo(() => {
+    const result = [];
+
+    if (joinedCount >= 1) result.push('First Event');
+    if (joinedCount >= 5) result.push('Social Butterfly');
+    if (hostedEvents.length >= 1) result.push('Host');
+
+    return result;
+  }, [joinedCount, hostedEvents]);
+
+  // ---------------- CONTEXT VALUE ----------------
 
   const value = {
-    user, login, signUp, logout, updateProfile,
-    events, goingIds, hostedIds, reviews, pastEvents, hostedEvents, joinedCount,
-    countOf, spotsLeft, joinEvent, leaveEvent, createEvent, addReview,
-    notifications, unreadCount, markAllRead, markRead, deleteNotification, clearNotifications,
-    chats, sendMessage, badges,
+    user,
+    authLoading,
+    login,
+    signUp,
+    logout,
+    updateProfile,
+
+    events,
+    setEvents,
+    goingIds,
+    hostedIds,
+    reviews,
+    notifications,
+    chats,
+
+    pushNotification,
+    markAllRead,
+    markRead,
+    deleteNotification,
+    clearNotifications,
+
+    countOf,
+    spotsLeft,
+    joinEvent,
+    leaveEvent,
+    createEvent,
+
+    addReview,
+    getOrCreateConversation,
+    loadEventConversations,
+    loadMessages,
+    markConversationRead,
+    sendMessage,
+
+    pastEvents,
+    unreadCount,
+    joinedCount,
+    hostedEvents,
+    badges,
   };
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+    </AppContext.Provider>
+  );
 }
 
 export const useApp = () => useContext(AppContext);
