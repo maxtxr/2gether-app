@@ -227,7 +227,6 @@ export function AppProvider({ children }) {
     };
   }, [user?.id]);
 
-  // Carregar participantes de todos os eventos
   useEffect(() => {
     let mounted = true;
 
@@ -261,10 +260,36 @@ export function AppProvider({ children }) {
       }
     };
 
+    if (!user) {
+      setParticipants({});
+      return;
+    }
+
+    // Subscrever alterações em tempo real
+    const channel = supabase
+      .channel('event-participants-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_participants',
+        },
+        (payload) => {
+          console.log('Participant change:', payload.eventType);
+          loadParticipants();
+        }
+      )
+      .subscribe((status) => {
+        console.log('Participants realtime:', status);
+      });
+
+    // Carregar participantes inicialmente
     loadParticipants();
 
     return () => {
       mounted = false;
+      supabase.removeChannel(channel);
     };
   }, [user?.id]);
 

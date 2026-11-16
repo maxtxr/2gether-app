@@ -13,7 +13,13 @@ import {
   Image,
 } from 'react-native';
 
-import MapView, { Marker } from 'react-native-maps';
+const MapView = Platform.OS !== 'web'
+  ? require('react-native-maps').default
+  : null;
+
+const Marker = Platform.OS !== 'web'
+  ? require('react-native-maps').Marker
+  : null;
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';

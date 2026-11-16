@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,6 +27,8 @@ import {
   AccessibilityBadge,
 } from '../components';
 
+import { supabase } from '../../lib/supabase';
+
 export default function EventDetailScreen({ route, navigation }) {
   const {
     events,
@@ -49,6 +52,41 @@ export default function EventDetailScreen({ route, navigation }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isOnWaitlist, setIsOnWaitlist] = useState(false);
+  const [isUpdatingWaitlist, setIsUpdatingWaitlist] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadWaitlistStatus = async () => {
+      if (!user || !event) {
+        setIsOnWaitlist(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('event_waitlist')
+        .select('id')
+        .eq('event_id', event.id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error loading waitlist:', error.message);
+        return;
+      }
+
+      if (mounted) {
+        setIsOnWaitlist(!!data);
+      }
+    };
+
+    loadWaitlistStatus();
+
+    return () => {
+      mounted = false;
+    };
+  }, [event?.id, user?.id]);
 
   if (!event) {
     return <Text style={{ padding: 16 }}>Event not found.</Text>;
@@ -78,15 +116,15 @@ export default function EventDetailScreen({ route, navigation }) {
   const eventEnded = eventDate
     ? eventDate < new Date()
     : !!event.past;
-    console.log('EVENT WHEN:', event.when);
-    console.log('EVENT DATE:', eventDate);
-    console.log('EVENT ENDED:', eventEnded);
-    console.log('HOSTING:', hosting);
-    console.log('GOING:', going);
-    console.log('CURRENT USER ID:', user?.id);
-    console.log('EVENT HOST ID:', event.host_id);
-    console.log('HOSTED IDS:', hostedIds);
-    console.log('HOSTING:', hosting);
+
+  console.log('EVENT WHEN:', event.when);
+  console.log('EVENT DATE:', eventDate);
+  console.log('EVENT ENDED:', eventEnded);
+  console.log('HOSTING:', hosting);
+  console.log('GOING:', going);
+  console.log('CURRENT USER ID:', user?.id);
+  console.log('EVENT HOST ID:', event.host_id);
+  console.log('HOSTED IDS:', hostedIds);
 
   const eventReviews = reviews[event.id] || [];
 
@@ -97,6 +135,48 @@ export default function EventDetailScreen({ route, navigation }) {
   const shown = (event.people || []).slice(0, 3);
 
   if (going) shown.unshift('ME');
+
+  // Entrar ou sair da lista de espera
+  const toggleWaitlist = async () => {
+    if (!user) {
+      setModal('You must be logged in to join the waitlist.');
+      return;
+    }
+
+    try {
+      setIsUpdatingWaitlist(true);
+
+      if (isOnWaitlist) {
+        const { error } = await supabase
+          .from('event_waitlist')
+          .delete()
+          .eq('event_id', event.id)
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        setIsOnWaitlist(false);
+        setModal('You have left the waitlist.');
+      } else {
+        const { error } = await supabase
+          .from('event_waitlist')
+          .insert({
+            event_id: event.id,
+            user_id: user.id,
+          });
+
+        if (error) throw error;
+
+        setIsOnWaitlist(true);
+        setModal('You have joined the waitlist!');
+      }
+    } catch (error) {
+      console.error('Waitlist error:', error);
+      setModal(error.message || 'Could not update the waitlist.');
+    } finally {
+      setIsUpdatingWaitlist(false);
+    }
+  };
 
   // Escolher e preparar fotografia
   const pickReviewImage = async () => {
@@ -290,21 +370,65 @@ export default function EventDetailScreen({ route, navigation }) {
               }}
               style={{ marginTop: 20 }}
             />
+          ) : full ? (
+            <View style={{ marginTop: 20 }}>
+              <Text style={{
+                color: colors.text,
+                fontWeight: '700',
+                fontSize: 16,
+                marginBottom: 6,
+              }}>
+                Event is full!
+              </Text>
+
+              <Text style={{
+                color: colors.muted,
+                fontSize: 14,
+                marginBottom: 12,
+              }}>
+                Want to receive a notification if a spot becomes available?
+              </Text>
+
+              <Button
+                title={
+                  isUpdatingWaitlist
+                    ? 'Please wait...'
+                    : isOnWaitlist
+                      ? 'Leave waitlist'
+                      : 'Notify me when a spot opens'
+                }
+                variant={isOnWaitlist ? 'outline' : undefined}
+                disabled={isUpdatingWaitlist}
+                onPress={toggleWaitlist}
+              />
+            </View>
           ) : (
-          <Button
-            title={full ? 'Event is full' : 'Join'}
-            disabled={full}
-            onPress={async () => {
-              try {
-                await joinEvent(event.id);
-                setModal(`You're going to ${event.title}!`);
-              } catch (error) {
-                console.error('Error joining event:', error);
-                setModal(error.message);
-              }
-            }}
-            style={{ marginTop: 20 }}
-          />
+            <Button
+              title="Join"
+              onPress={async () => {
+                try {
+                  await joinEvent(event.id);
+
+                  // Remover da lista de espera depois de entrar
+                  const { error } = await supabase
+                    .from('event_waitlist')
+                    .delete()
+                    .eq('event_id', event.id)
+                    .eq('user_id', user.id);
+
+                  if (error) {
+                    console.error('Error leaving waitlist:', error.message);
+                  }
+
+                  setIsOnWaitlist(false);
+                  setModal(`You're going to ${event.title}!`);
+                } catch (error) {
+                  console.error('Error joining event:', error);
+                  setModal(error.message);
+                }
+              }}
+              style={{ marginTop: 20 }}
+            />
           )}
         </>
       )}
