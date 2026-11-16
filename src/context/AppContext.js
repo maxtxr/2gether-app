@@ -1,3 +1,4 @@
+
 import {
   createContext,
   useContext,
@@ -20,6 +21,7 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [events, setEvents] = useState(seedEvents);
+  const [participants, setParticipants] = useState({});
   const [goingIds, setGoingIds] = useState([]);
   const [hostedIds, setHostedIds] = useState([]);
   const [reviews, setReviews] = useState({});
@@ -60,7 +62,6 @@ export function AppProvider({ children }) {
     eventId: notification.event_id,
     messageCount: notification.message_count || 1,
   });
-
 
   // Carregar o perfil da tabela profiles
   const loadProfile = async (authUser) => {
@@ -162,6 +163,38 @@ export function AppProvider({ children }) {
     };
   }, [user]);
 
+  // Carregar eventos organizados pelo utilizador
+  useEffect(() => {
+    let mounted = true;
+
+    const loadHostedEvents = async () => {
+      if (!user) {
+        setHostedIds([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('events')
+        .select('id')
+        .eq('host_id', user.id);
+
+      if (error) {
+        console.error('Error loading hosted events:', error.message);
+        return;
+      }
+
+      if (mounted) {
+        setHostedIds(data.map((event) => event.id));
+      }
+    };
+
+    loadHostedEvents();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
+
   // Carregar participações do utilizador
   useEffect(() => {
     let mounted = true;
@@ -188,6 +221,134 @@ export function AppProvider({ children }) {
     };
 
     loadGoingEvents();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
+
+  // Carregar participantes de todos os eventos
+  useEffect(() => {
+    let mounted = true;
+
+    const loadParticipants = async () => {
+      if (!user) {
+        setParticipants({});
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('event_participants')
+        .select('event_id, user_id');
+
+      if (error) {
+        console.error('Error loading participants:', error.message);
+        return;
+      }
+
+      const grouped = {};
+
+      data.forEach((participant) => {
+        if (!grouped[participant.event_id]) {
+          grouped[participant.event_id] = [];
+        }
+
+        grouped[participant.event_id].push(participant.user_id);
+      });
+
+      if (mounted) {
+        setParticipants(grouped);
+      }
+    };
+
+    loadParticipants();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
+
+  // Carregar reviews do Supabase
+  useEffect(() => {
+    let mounted = true;
+
+    const loadReviews = async () => {
+      if (!user) {
+        setReviews({});
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading reviews:', error.message);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        if (mounted) setReviews({});
+        return;
+      }
+
+      const userIds = [...new Set(data.map((r) => r.user_id))];
+      const eventIds = [...new Set(data.map((r) => r.event_id))];
+
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      const { data: eventData, error: eventsError } = await supabase
+        .from('events')
+        .select('id, title')
+        .in('id', eventIds);
+
+      if (eventsError) throw eventsError;
+
+      const grouped = {};
+
+      data.forEach((review) => {
+        const profile = profiles.find((p) => p.id === review.user_id);
+        const event = eventData.find((e) => e.id === review.event_id);
+
+        const imageUrl = review.image_path
+          ? supabase.storage
+              .from('review-images')
+              .getPublicUrl(review.image_path).data.publicUrl
+          : null;
+
+        const mappedReview = {
+          id: review.id,
+          eventId: review.event_id,
+          userId: review.user_id,
+          content: review.content,
+          rating: review.rating,
+          imageUrl,
+          author: profile?.name || 'Unknown',
+          eventTitle: event?.title || 'Event',
+          createdAt: review.created_at,
+        };
+
+        if (!grouped[review.event_id]) {
+          grouped[review.event_id] = [];
+        }
+
+        grouped[review.event_id].push(mappedReview);
+      });
+
+      if (mounted) {
+        setReviews(grouped);
+      }
+    };
+
+    loadReviews().catch((error) => {
+      console.error('Error loading reviews:', error.message);
+    });
 
     return () => {
       mounted = false;
@@ -317,7 +478,6 @@ export function AppProvider({ children }) {
       }
 
       return data.user;
-
     } finally {
       isSigningUp.current = false;
     }
@@ -336,7 +496,6 @@ export function AppProvider({ children }) {
   const updateProfile = async (patch) => {
     if (!user) return;
 
-    // Só enviar os campos que foram alterados
     const updates = {};
 
     if (patch.name !== undefined) updates.name = patch.name;
@@ -354,7 +513,6 @@ export function AppProvider({ children }) {
 
     if (error) throw error;
 
-    // Atualizar também os dados na aplicação
     setUser((currentUser) => ({
       ...currentUser,
       ...mapUser(
@@ -493,14 +651,17 @@ export function AppProvider({ children }) {
 
   // ---------------- EVENTS ----------------
 
+  // Contar participantes de um evento
   const countOf = (event) => {
-    return event.attendees?.length || 0;
+    return participants[event.id]?.length || 0;
   };
 
+  // Calcular lugares disponíveis
   const spotsLeft = (event) => {
     return Math.max(0, event.capacity - countOf(event));
   };
 
+  // Entrar num evento
   const joinEvent = async (eventId) => {
     if (!user) {
       throw new Error('You must be logged in to join an event.');
@@ -508,20 +669,33 @@ export function AppProvider({ children }) {
 
     if (goingIds.includes(eventId)) return;
 
-    const { error } = await supabase
-      .from('event_participants')
-      .insert({
-        event_id: eventId,
-        user_id: user.id,
-      });
+    const { error } = await supabase.rpc('join_event', {
+      p_event_id: eventId,
+    });
 
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes('EVENT_FULL')) {
+        throw new Error('This event is full.');
+      }
+
+      throw error;
+    }
 
     setGoingIds((current) =>
       current.includes(eventId) ? current : [...current, eventId]
     );
+
+    setParticipants((current) => ({
+      ...current,
+      [eventId]: [
+        ...(current[eventId] || []),
+        user.id,
+      ],
+    }));
   };
 
+
+  // Sair de um evento
   const leaveEvent = async (eventId) => {
     if (!user) {
       throw new Error('You must be logged in to leave an event.');
@@ -538,9 +712,16 @@ export function AppProvider({ children }) {
     setGoingIds((current) =>
       current.filter((id) => id !== eventId)
     );
+
+    setParticipants((current) => ({
+      ...current,
+      [eventId]: (current[eventId] || []).filter(
+        (id) => id !== user.id
+      ),
+    }));
   };
 
-  
+  // Criar evento
   const createEvent = async (eventData) => {
     if (!user) {
       throw new Error('You must be logged in to create an event.');
@@ -548,11 +729,13 @@ export function AppProvider({ children }) {
 
     console.log('1. A criar evento...');
 
+    const { imageUri, ...eventFields } = eventData;
+
     const newEvent = {
-      ...eventData,
+      ...eventFields,
       host: user.name,
       host_id: user.id,
-      short: eventData.when,
+      short: eventFields.when,
       base: 0,
       people: [],
     };
@@ -567,37 +750,173 @@ export function AppProvider({ children }) {
 
     console.log('2. Evento criado:', data);
 
-    setEvents((current) => [data, ...current]);
-    console.log('3. Eventos atualizados');
+    let finalEvent = data;
+    let imagePath = null;
 
-    setHostedIds((current) => [...current, data.id]);
-    console.log('4. HostedIds atualizado');
+    if (imageUri) {
+      try {
+        const response = await fetch(imageUri);
+
+        if (!response.ok) {
+          throw new Error('Could not read the selected image.');
+        }
+
+        const imageBlob = await response.blob();
+
+        imagePath = `${user.id}/${data.id}.jpg`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('event-images')
+          .upload(imagePath, imageBlob, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: updatedEvent, error: updateError } = await supabase
+          .from('events')
+          .update({ image_path: imagePath })
+          .eq('id', data.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        finalEvent = updatedEvent;
+
+        console.log('3. Fotografia enviada:', imagePath);
+      } catch (imageError) {
+        console.error('Error uploading event image:', imageError);
+
+        if (imagePath) {
+          await supabase.storage
+            .from('event-images')
+            .remove([imagePath]);
+        }
+
+        await supabase
+          .from('events')
+          .delete()
+          .eq('id', data.id)
+          .eq('host_id', user.id);
+
+        throw new Error(
+          `Event image upload failed: ${imageError.message}`
+        );
+      }
+    }
+
+    setEvents((current) => [finalEvent, ...current]);
+
+    console.log('4. Eventos atualizados');
+
+    setHostedIds((current) => [...current, finalEvent.id]);
+
+    console.log('5. HostedIds atualizado');
 
     await pushNotification({
       title: 'Event created',
-      message: `Your event "${data.title}" has been created.`,
+      message: `Your event "${finalEvent.title}" has been created.`,
       type: 'event',
     });
 
-    console.log('5. Notificação criada');
+    console.log('6. Notificação criada');
 
-    return data;
+    return finalEvent;
   };
 
   // ---------------- REVIEWS ----------------
 
-  const addReview = (eventId, review) => {
+  const addReview = async (eventId, review) => {
+    if (!user) {
+      throw new Error('You must be logged in to publish a review.');
+    }
+
+    const content = (review.content || '').trim();
+    const rating = Number(review.rating);
+    const imageUri = review.imageUri || null;
+
+    if (!content) {
+      throw new Error('Please write your review.');
+    }
+
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new Error('Please select a rating between 1 and 5.');
+    }
+
+    let imagePath = null;
+
+    if (imageUri) {
+      imagePath = `${user.id}/${eventId}.jpg`;
+
+      const response = await fetch(imageUri);
+
+      if (!response.ok) {
+        throw new Error('Could not read the selected image.');
+      }
+
+      const imageBlob = await response.blob();
+
+      const { error: uploadError } = await supabase.storage
+        .from('review-images')
+        .upload(imagePath, imageBlob, {
+          contentType: 'image/jpeg',
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+    }
+
+    const { data, error } = await supabase
+      .from('reviews')
+      .insert({
+        event_id: eventId,
+        user_id: user.id,
+        content,
+        rating,
+        image_path: imagePath,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (imagePath) {
+        await supabase.storage
+          .from('review-images')
+          .remove([imagePath]);
+      }
+
+      throw error;
+    }
+
+    const event = events.find((e) => e.id === eventId);
+
+    const newReview = {
+      id: data.id,
+      eventId: data.event_id,
+      userId: data.user_id,
+      content: data.content,
+      rating: data.rating,
+      imageUrl: imagePath
+        ? supabase.storage
+            .from('review-images')
+            .getPublicUrl(imagePath).data.publicUrl
+        : null,
+      author: user.name,
+      eventTitle: event?.title || 'Event',
+      createdAt: data.created_at,
+    };
+
     setReviews((current) => ({
       ...current,
       [eventId]: [
+        newReview,
         ...(current[eventId] || []),
-        {
-          id: uid(),
-          ...review,
-          author: user?.name || 'Unknown',
-        },
       ],
     }));
+
+    return newReview;
   };
 
   // ---------------- CHATS ----------------
@@ -643,7 +962,6 @@ export function AppProvider({ children }) {
       .single();
 
     if (error) {
-      // Se a conversa já tiver sido criada entretanto, recuperá-la
       if (error.code === '23505') {
         const { data: conversation, error: retryError } =
           await supabase
@@ -662,7 +980,6 @@ export function AppProvider({ children }) {
 
     return data;
   };
-
 
   // Carregar todas as conversas de um evento (para o organizador)
   const loadEventConversations = async (eventId) => {
@@ -727,7 +1044,6 @@ export function AppProvider({ children }) {
       };
     });
   };
-
 
   // Carregar mensagens de uma conversa
   const loadMessages = async (conversationId) => {
@@ -825,7 +1141,6 @@ export function AppProvider({ children }) {
     return data;
   };
 
-
   // ---------------- DERIVED DATA ----------------
 
   const pastEvents = events.filter(
@@ -839,8 +1154,8 @@ export function AppProvider({ children }) {
   const joinedCount = goingIds.length;
 
   const hostedEvents = events.filter(
-  (e) => e.host_id === user?.id
-);
+    (e) => e.host_id === user?.id
+  );
 
   const badges = useMemo(() => {
     const result = [];
@@ -864,6 +1179,7 @@ export function AppProvider({ children }) {
 
     events,
     setEvents,
+    participants,
     goingIds,
     hostedIds,
     reviews,
