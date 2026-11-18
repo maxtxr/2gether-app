@@ -66,7 +66,7 @@ const handleLogin = async () => {
         {/* Brand Header */}
         <View style={styles.header}>
           <Logo size={84} />
-          <Text style={styles.brandTitle}>2GETHR</Text>
+          <Text style={styles.brandTitle}>2GETHER</Text>
           <Text style={styles.screenHeading}>LOGIN</Text>
         </View>
 
@@ -234,15 +234,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   error: {
-    color: '#FFFFFF',
-    backgroundColor: colors.danger,
-    borderRadius: radii.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    color: colors.danger,
     fontSize: 13,
     fontWeight: '600',
     marginTop: spacing.sm,
-    overflow: 'hidden',
   },
   note: {
     color: '#E0E7E3',

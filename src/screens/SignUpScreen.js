@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../theme';
 import { Logo, Button } from '../components';
 import { useApp } from '../context/AppContext';
+import { isValidEmail, isStrongPassword, PASSWORD_RULES } from '../utils/validation';
 
 export default function SignUpScreen({ navigation }) {
   const { signUp } = useApp();
@@ -36,15 +37,13 @@ export default function SignUpScreen({ navigation }) {
       return;
     }
 
-    const emailRegex = /\S+@\S+\.\S+/;
-
-    if (!emailRegex.test(trimmedEmail)) {
+    if (!isValidEmail(trimmedEmail)) {
       setError('Please enter a valid email address (e.g. name@example.com).');
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (!isStrongPassword(password)) {
+      setError('Please satisfy all password requirements.');
       return;
     }
 
@@ -53,11 +52,7 @@ export default function SignUpScreen({ navigation }) {
     try {
       setIsSubmitting(true);
 
-      await signUp(
-        trimmedName,
-        trimmedEmail,
-        password
-      );
+      await signUp(trimmedName, trimmedEmail, password);
 
       Alert.alert(
         'Account created!',
@@ -69,14 +64,14 @@ export default function SignUpScreen({ navigation }) {
           },
         ]
       );
-
     } catch (err) {
       console.error('Signup error:', err);
       setError(err.message || 'Could not create account. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.keyboardContainer}
@@ -91,7 +86,7 @@ export default function SignUpScreen({ navigation }) {
         {/* Brand Header */}
         <View style={styles.header}>
           <Logo size={84} />
-          <Text style={styles.brandTitle}>2GETHR</Text>
+          <Text style={styles.brandTitle}>2GETHER</Text>
           <Text style={styles.screenHeading}>CREATE ACCOUNT</Text>
         </View>
 
@@ -137,7 +132,7 @@ export default function SignUpScreen({ navigation }) {
               style={[styles.input, styles.passwordInput]}
               value={password}
               onChangeText={(v) => { setPassword(v); setError(''); }}
-              placeholder="Create a password (min. 6 chars)"
+              placeholder="Create a password"
               placeholderTextColor="#8A938D"
               secureTextEntry={!showPassword}
               autoCapitalize="none"
@@ -158,6 +153,31 @@ export default function SignUpScreen({ navigation }) {
                 color="#6C757D"
               />
             </Pressable>
+          </View>
+
+          {/* Live Password Rules */}
+          <View style={styles.rulesContainer}>
+            {PASSWORD_RULES.map((rule) => {
+              const satisfied = rule.test(password);
+              return (
+                <View key={rule.key} style={styles.ruleRow}>
+                  <Ionicons
+                    name={satisfied ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={15}
+                    color={satisfied ? '#A3E635' : '#D1E0D7'}
+                    style={styles.ruleIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.ruleText,
+                      satisfied ? styles.ruleTextPassed : styles.ruleTextPending,
+                    ]}
+                  >
+                    {rule.label}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -256,19 +276,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  error: {
+  rulesContainer: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    gap: 4,
+  },
+  ruleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ruleIcon: {
+    marginRight: spacing.xs + 2,
+  },
+  ruleText: {
+    fontSize: 12.5,
+  },
+  ruleTextPending: {
+    color: '#D1E0D7',
+  },
+  ruleTextPassed: {
     color: '#FFFFFF',
-    backgroundColor: colors.danger,
-    borderRadius: radii.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    fontWeight: '600',
+  },
+  error: {
+    color: colors.danger,
     fontSize: 13,
     fontWeight: '600',
     marginTop: spacing.sm,
-    overflow: 'hidden',
   },
   submitBtn: {
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
   },
   switchRow: {
     flexDirection: 'row',

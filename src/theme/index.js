@@ -13,7 +13,8 @@ export const colors = {
   chip: '#E9ECEF',
   chipSelected: '#0F4D3A',
   border: '#E2E8F0',
-  danger: '#DC3545',
+  danger: '#ff1d34',
+  dangerOnDark: '#FFB4AB',    // Legible red on the green auth screens
   success: '#28A745',
   overlay: 'rgba(0, 0, 0, 0.45)',
 };

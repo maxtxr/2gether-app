@@ -12,7 +12,7 @@ import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
 import { EventCard } from '../components';
 
-export default function ForYouScreen({ navigation }) {
+export default function HomeScreen({ navigation }) {
   const { user, events, reviews } = useApp();
 
   const interests = user?.interests || [];
@@ -54,7 +54,7 @@ export default function ForYouScreen({ navigation }) {
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>
-            Hi {firstName} 👋
+            Hi, {firstName} 👋
           </Text>
 
           <Text style={styles.subtitle}>
