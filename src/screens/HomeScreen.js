@@ -8,7 +8,7 @@ import {
 
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
-import { useApp } from '../context/AppContext';
+import { useApp, eventHasEnded } from '../context/AppContext';
 import { EventCard } from '../components';
 import { useState } from 'react'
 
@@ -19,7 +19,7 @@ export default function HomeScreen({ navigation }) {
   const interests = user?.interests || [];
   const firstName = (user?.name || '').trim().split(/\s+/)[0];
 
-  const upcoming = events.filter((e) => !e.past);
+  const upcoming = events.filter((e) => !eventHasEnded(e));
 
   const matchesInterests = (e) =>
     interests.some(

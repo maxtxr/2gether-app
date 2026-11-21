@@ -9,45 +9,8 @@ import {
 } from 'react-native';
 
 import { colors, radii } from '../theme';
-import { useApp } from '../context/AppContext';
+import { useApp, eventHasEnded } from '../context/AppContext';
 import { EventCard, Button } from '../components';
-
-// Converter a data do evento para um objeto Date
-function getEventDate(event) {
-  const value = event.when || event.date;
-
-  if (!value) return null;
-
-  // Formato utilizado no Supabase: DD/MM/YYYY, HH:mm
-  const match = value.match(
-    /^(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})$/
-  );
-
-  if (match) {
-    const [, day, month, year, hour, minute] = match;
-
-    return new Date(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute)
-    );
-  }
-
-  // Compatibilidade com datas noutros formatos
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function eventHasEnded(event) {
-  const date = getEventDate(event);
-
-  if (!date) return !!event.past;
-
-  return date < new Date();
-}
 
 export default function MyEventsScreen({ navigation }) {
   const {
@@ -73,6 +36,10 @@ export default function MyEventsScreen({ navigation }) {
       goingIds.includes(event.id) &&
       eventHasEnded(event)
   );
+
+  // Eventos que organizo, separados entre futuros e passados
+  const upcomingHosted = hostedEvents.filter((event) => !eventHasEnded(event));
+  const pastHosted = hostedEvents.filter((event) => eventHasEnded(event));
 
   const open = (id) =>
     navigation.navigate('EventDetail', { id });
@@ -131,10 +98,10 @@ export default function MyEventsScreen({ navigation }) {
           )}
 
           <Text style={styles.section}>
-            Hosting · {hostedEvents.length}
+            Hosting · {upcomingHosted.length}
           </Text>
 
-          {hostedEvents.map((event) => (
+          {upcomingHosted.map((event) => (
             <EventCard
               key={event.id}
               event={event}
@@ -142,7 +109,7 @@ export default function MyEventsScreen({ navigation }) {
             />
           ))}
 
-          {hostedEvents.length === 0 && (
+          {upcomingHosted.length === 0 && (
             <Text style={styles.empty}>
               You are not hosting any event.
             </Text>
@@ -168,7 +135,13 @@ export default function MyEventsScreen({ navigation }) {
                 onPress={() => open(event.id)}
                 right={
                   <Pressable
-                    onPress={() => open(event.id)}
+                    // Sem review: vai direto ao ecrã da review; com review: abre o evento
+                    onPress={() =>
+                      myReview
+                        ? open(event.id)
+                        : navigation.navigate('Review', { id: event.id })
+                    }
+                    accessibilityLabel={myReview ? `Your rating: ${myReview.rating} stars` : `Review ${event.title}`}
                     style={[
                       styles.reviewBtn,
                       myReview && styles.reviewDone,
@@ -195,6 +168,22 @@ export default function MyEventsScreen({ navigation }) {
             <Text style={styles.empty}>
               You don't have any past events yet.
             </Text>
+          )}
+
+          {pastHosted.length > 0 && (
+            <>
+              <Text style={styles.section}>
+                Hosted · {pastHosted.length}
+              </Text>
+
+              {pastHosted.map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onPress={() => open(event.id)}
+                />
+              ))}
+            </>
           )}
         </>
       )}

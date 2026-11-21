@@ -3,7 +3,7 @@ import { View, Text, TextInput, ScrollView, Pressable, StyleSheet, Alert } from 
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
 import { CATEGORIES, LEVELS, ACCESSIBILITY } from '../data/options';
-import { useApp } from '../context/AppContext';
+import { useApp, eventHasEnded } from '../context/AppContext';
 import { Chip, EventCard } from '../components';
 import EventMap from '../components/events/EventMap';
 
@@ -22,10 +22,10 @@ export default function ExploreScreen({ navigation }) {
     const term = q.trim().toLowerCase();
     return events.filter(
       (e) =>
-        !e.past &&
+        !eventHasEnded(e) &&
         (cat === 'All' || e.category === cat) &&
         (!level || e.level === level || e.level === 'All levels') &&
-        (!access || e.accessibility.includes(access)) &&
+        (!access || (e.accessibility || []).includes(access)) &&
         (!term || `${e.title} ${e.area} ${e.place} ${e.sport}`.toLowerCase().includes(term))
     );
   }, [events, q, cat, level, access]);

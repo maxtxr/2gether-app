@@ -21,7 +21,8 @@ export const TABS = {
   Home: { label: 'Home', icon: 'home-outline', iconOn: 'home' },
   Search: { label: 'Search', icon: 'search-outline', iconOn: 'search' },
   MyEvents: { label: 'My events', icon: 'calendar-outline', iconOn: 'calendar' },
-  Notifications: { label: 'Notifications', icon: 'notifications-outline', iconOn: 'notifications' },
+  // "Alerts" (as in the Stage 3 mockups): "Notifications" does not fit under the icon
+  Notifications: { label: 'Alerts', icon: 'notifications-outline', iconOn: 'notifications' },
   Profile: { label: 'Profile', icon: 'person-outline', iconOn: 'person' },
 };
 
@@ -38,8 +39,8 @@ const ICON_SIZE = 22;
 // Raise/lower this to give the icons more or less breathing room.
 const TAB_BAR_HEIGHT = 60;
 
-// Icon-only tab bar for now. Set to true to show the labels again.
-const SHOW_LABELS = false;
+// Labels under the icons (Testing Day feedback: users look for "My events").
+const SHOW_LABELS = true;
 
 // React Navigation pads each tab by 5px and aligns its content to the top, so
 // add the leftover space as a top margin to sit the icon in the middle.
@@ -76,6 +77,8 @@ export default function AppTabs() {
           tabBarLabel: config.label,
           // Kept for accessibility/screen readers even when hidden.
           tabBarShowLabel: SHOW_LABELS,
+          // Always under the icon, centred (wide screens default to beside the icon)
+          tabBarLabelPosition: 'below-icon',
           tabBarActiveTintColor: '#fff',
           tabBarInactiveTintColor: '#B9CFC5',
           tabBarStyle: [styles.tabBar, { height: TAB_BAR_HEIGHT + insets.bottom }],
@@ -114,6 +117,7 @@ const styles = StyleSheet.create({
   },
   tabBarLabel: {
     fontSize: 11,
+    textAlign: 'center',
   },
   iconCircle: {
     width: ICON_CIRCLE_SIZE,

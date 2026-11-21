@@ -77,7 +77,7 @@ function Root() {
           <Stack.Screen
             name="Chat"
             component={ChatScreen}
-            options={{ title: 'Group chat' }}
+            options={{ title: 'Chat' }}
           />
           <Stack.Screen
             name="CreateEvent"

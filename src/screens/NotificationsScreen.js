@@ -1,7 +1,33 @@
+import { useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
+import { ConfirmModal } from '../components';
+
+// Ícone de cada notificação conforme o que aconteceu
+function iconFor(n) {
+  const title = (n.title || '').toLowerCase();
+
+  if (n.type === 'message') return 'chatbubble-ellipses-outline';
+  if (title.includes('joined')) return 'person-add-outline';
+  if (title.includes('spot')) return 'ticket-outline';
+  if (title.includes('created')) return 'add-circle-outline';
+  if (title.includes('reminder') || title.includes('coming up')) return 'calendar-outline';
+  if (title.includes('review') || title.includes('how was it')) return 'star-outline';
+  return 'notifications-outline';
+}
+
+// "14:05" para hoje/ontem; "19 Nov, 14:05" para datas mais antigas
+function timeLabel(createdAt, showDate) {
+  const date = new Date(createdAt);
+  const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+  if (!showDate) return time;
+
+  const day = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return `${day}, ${time}`;
+}
 
 export default function NotificationsScreen({ navigation }) {
   const {
@@ -14,6 +40,8 @@ export default function NotificationsScreen({ navigation }) {
     events,
     user,
   } = useApp();
+
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const groups = [
     {
@@ -58,17 +86,22 @@ export default function NotificationsScreen({ navigation }) {
       <View style={styles.row}>
         <Text style={styles.sub}>{unreadCount} unread</Text>
 
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable onPress={markAllRead} style={styles.action}>
-            <Text style={styles.actionText}>Mark all as read</Text>
-          </Pressable>
+        {/* Só faz sentido mostrar as ações quando há notificações */}
+        {notifications.length > 0 && (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {unreadCount > 0 && (
+              <Pressable onPress={markAllRead} style={styles.action} accessibilityRole="button">
+                <Text style={styles.actionText}>Mark all as read</Text>
+              </Pressable>
+            )}
 
-          <Pressable onPress={clearNotifications} style={styles.action}>
-            <Text style={[styles.actionText, { color: colors.danger }]}>
-              Clear all
-            </Text>
-          </Pressable>
-        </View>
+            <Pressable onPress={() => setConfirmClear(true)} style={styles.action} accessibilityRole="button">
+              <Text style={[styles.actionText, { color: colors.danger }]}>
+                Clear all
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {groups.map(({ g, items }) => (
@@ -76,9 +109,9 @@ export default function NotificationsScreen({ navigation }) {
           <Text style={styles.group}>{g}</Text>
 
           {items.map((n) => (
+            <View key={n.id} style={styles.card}>
             <Pressable
-              key={n.id}
-              style={styles.card}
+              style={styles.cardMain}
               onPress={async () => {
                 try {
                   await markRead(n.id);
@@ -103,6 +136,9 @@ export default function NotificationsScreen({ navigation }) {
                         id: n.eventId,
                       });
                     }
+                  } else if (n.eventId && iconFor(n) === 'star-outline') {
+                    // "How was it?": abre logo o ecrã da review
+                    navigation.navigate('Review', { id: n.eventId });
                   } else if (n.eventId) {
                     navigation.navigate('EventDetail', {
                       id: n.eventId,
@@ -116,7 +152,7 @@ export default function NotificationsScreen({ navigation }) {
             >
               <View style={styles.icon}>
                 <Ionicons
-                  name="notifications-outline"
+                  name={iconFor(n)}
                   size={20}
                   color={colors.green}
                 />
@@ -127,18 +163,17 @@ export default function NotificationsScreen({ navigation }) {
                 <Text style={styles.body}>{n.message}</Text>
 
                 <Text style={styles.time}>
-                  {new Date(n.createdAt).toLocaleString()}
+                  {timeLabel(n.createdAt, g === 'Earlier')}
                 </Text>
               </View>
 
               {!n.read && <View style={styles.dot} />}
+            </Pressable>
 
               <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  deleteNotification(n.id);
-                }}
+                onPress={() => deleteNotification(n.id)}
                 hitSlop={4}
+                accessibilityRole="button"
                 accessibilityLabel="Delete notification"
                 style={styles.deleteBtn}
               >
@@ -148,7 +183,7 @@ export default function NotificationsScreen({ navigation }) {
                   color={colors.muted}
                 />
               </Pressable>
-            </Pressable>
+            </View>
           ))}
         </View>
       ))}
@@ -156,6 +191,24 @@ export default function NotificationsScreen({ navigation }) {
       {notifications.length === 0 && (
         <Text style={styles.empty}>No new notifications</Text>
       )}
+
+      <ConfirmModal
+        visible={confirmClear}
+        variant="danger"
+        title="Clear all notifications?"
+        message={`This will permanently delete ${notifications.length} ${notifications.length === 1 ? 'notification' : 'notifications'}.`}
+        confirmText="Clear all"
+        cancelText="Cancel"
+        onConfirm={async () => {
+          setConfirmClear(false);
+          try {
+            await clearNotifications();
+          } catch (error) {
+            Alert.alert('Could not clear notifications', error.message);
+          }
+        }}
+        onCancel={() => setConfirmClear(false)}
+      />
     </ScrollView>
   );
 }
@@ -198,6 +251,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
+  },
+  cardMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   icon: {
     width: 36,

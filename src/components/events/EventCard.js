@@ -1,21 +1,46 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme';
-import { useApp } from '../../context/AppContext';
+import { useApp, eventHasEnded } from '../../context/AppContext';
+import ConfirmModal from '../common/ConfirmModal';
 
-export default function EventCard({ event, onPress, onQuickJoin, right }) {
-  const { goingIds = [], hostedIds = [] } = useApp();
+export default function EventCard({ event, onPress, right }) {
+  const { goingIds = [], hostedIds = [], joinEvent } = useApp();
   const going = goingIds.includes(event.id);
   const hosting = hostedIds.includes(event.id);
 
+  // Inscrição rápida pelo "+": pergunta primeiro, depois mostra o resultado
+  const [confirmJoin, setConfirmJoin] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const quickJoin = async () => {
+    setConfirmJoin(false);
+    try {
+      await joinEvent(event.id);
+      setResult({
+        title: "You're going!",
+        message: `You joined ${event.title}. See you there!`,
+      });
+    } catch (error) {
+      setResult({
+        title: 'Something went wrong',
+        message: error.message || 'Could not join the event. Please try again.',
+        variant: 'danger',
+      });
+    }
+  };
+
+  const where = [event.place, event.area].filter(Boolean).join(' · ');
+
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`View details for ${event.title}`}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-    >
+    <View style={styles.card}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`View details for ${event.title}`}
+        style={({ pressed }) => [styles.main, pressed && styles.cardPressed]}
+      >
       {/* Sport Category Icon Container */}
       <View style={styles.categoryIconBox}>
         <Ionicons
@@ -38,7 +63,8 @@ export default function EventCard({ event, onPress, onQuickJoin, right }) {
 
         <View style={styles.metaRow}>
           <Ionicons name="location-outline" size={13} color={colors.muted} />
-          <Text style={styles.metaText}>{event.area}</Text>
+          {/* Zona do evento; eventos antigos sem zona mostram o local */}
+          <Text style={styles.metaText} numberOfLines={1}>{event.area || event.place}</Text>
           <Text style={styles.bullet}>•</Text>
           <View style={styles.levelTag}>
             <Text style={styles.levelText}>{event.level || 'All levels'}</Text>
@@ -53,6 +79,7 @@ export default function EventCard({ event, onPress, onQuickJoin, right }) {
           </View>
         )}
       </View>
+      </Pressable>
 
       {/* Status or Join Action (or a custom trailing element like the Review button) */}
       <View style={styles.actionContainer}>
@@ -60,7 +87,7 @@ export default function EventCard({ event, onPress, onQuickJoin, right }) {
           right
         ) : hosting ? (
           <View style={[styles.badge, styles.badgeHosting]}>
-            <Text style={styles.badgeText}>Hosting</Text>
+            <Text style={styles.badgeText}>{eventHasEnded(event) ? 'Hosted' : 'Hosting'}</Text>
           </View>
         ) : going ? (
           <View style={[styles.badge, styles.badgeGoing]}>
@@ -68,10 +95,7 @@ export default function EventCard({ event, onPress, onQuickJoin, right }) {
           </View>
         ) : (
           <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
-              onQuickJoin ? onQuickJoin(event) : onPress();
-            }}
+            onPress={() => setConfirmJoin(true)}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={`Join ${event.title}`}
@@ -81,7 +105,25 @@ export default function EventCard({ event, onPress, onQuickJoin, right }) {
           </Pressable>
         )}
       </View>
-    </Pressable>
+
+      <ConfirmModal
+        visible={confirmJoin}
+        title={`Join ${event.title}?`}
+        message={[event.short || event.when, where].filter(Boolean).join('\n')}
+        confirmText="Join"
+        cancelText="Not now"
+        onConfirm={quickJoin}
+        onCancel={() => setConfirmJoin(false)}
+      />
+
+      <ConfirmModal
+        visible={!!result}
+        title={result?.title}
+        message={result?.message}
+        variant={result?.variant}
+        onConfirm={() => setResult(null)}
+      />
+    </View>
   );
 }
 
@@ -100,6 +142,11 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  main: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   cardPressed: {
     opacity: 0.95,
@@ -137,6 +184,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     marginLeft: spacing.xs,
+    flexShrink: 1,
   },
   bullet: {
     color: colors.muted,

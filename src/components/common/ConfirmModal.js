@@ -6,9 +6,9 @@ import Button from './Button';
 
 export default function ConfirmModal({
   visible,
-  title = 'Your action was confirmed',
+  title = 'Done',
   message,
-  confirmText = 'Confirm',
+  confirmText = 'OK',
   cancelText,
   variant = 'success', // 'success' | 'danger'
   onConfirm,

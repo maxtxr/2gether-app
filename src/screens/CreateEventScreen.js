@@ -30,6 +30,34 @@ import { useApp } from '../context/AppContext';
 import { Chip, Button, ConfirmModal } from '../components';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
+// Zona (cidade / concelho) a partir de um resultado do Photon
+const areaFromPhoton = (properties = {}) =>
+  properties.city || properties.district || properties.county || properties.state || '';
+
+// Descobre a zona e as coordenadas de um local com o Photon (OpenStreetMap):
+// pelas coordenadas, se existirem, ou pelo texto escrito pelo utilizador.
+async function lookupLocation({ coordinate, query }) {
+  if (!coordinate && (!query || query.length < 3)) return null;
+
+  const url = coordinate
+    ? `https://photon.komoot.io/reverse?lat=${coordinate.latitude}&lon=${coordinate.longitude}&lang=en`
+    : `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1&lang=en`;
+
+  const response = await fetch(url);
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  const feature = data.features?.[0];
+  if (!feature) return null;
+
+  const [lng, lat] = feature.geometry.coordinates;
+
+  return {
+    area: areaFromPhoton(feature.properties),
+    coordinate: { latitude: Number(lat), longitude: Number(lng) },
+  };
+}
+
 export default function CreateEventScreen({ navigation }) {
   const { createEvent } = useApp();
 
@@ -61,6 +89,7 @@ export default function CreateEventScreen({ navigation }) {
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [selectedCoordinate, setSelectedCoordinate] = useState(null);
   const [selectedAddress, setSelectedAddress] = useState('');
+  const [selectedArea, setSelectedArea] = useState('');
 
   const [mapRegion, setMapRegion] = useState({
     latitude: 39.5,
@@ -364,6 +393,7 @@ export default function CreateEventScreen({ navigation }) {
 
     setSelectedCoordinate(coordinate);
     setSelectedAddress(fullAddress || locationName);
+    setSelectedArea(areaFromPhoton(properties));
     setPlace(locationName);
 
     setMapRegion({
@@ -382,6 +412,24 @@ export default function CreateEventScreen({ navigation }) {
     try {
       setIsSubmitting(true);
 
+      // Garantir zona (e, se faltar, coordenadas para o mapa): quando o local
+      // foi escrito à mão ou marcado no mapa, pergunta-se ao Photon.
+      let coordinate = selectedCoordinate;
+      let area = selectedArea;
+
+      if (!area || !coordinate) {
+        try {
+          const found = await lookupLocation({ coordinate, query: place.trim() });
+
+          if (found) {
+            area = area || found.area;
+            coordinate = coordinate || found.coordinate;
+          }
+        } catch (lookupError) {
+          console.warn('Could not look up the event area:', lookupError.message);
+        }
+      }
+
       await createEvent({
         title: title.trim(),
         category,
@@ -391,8 +439,9 @@ export default function CreateEventScreen({ navigation }) {
         when: `${formatDate(date)}, ${time.trim()}`,
         place: place.trim(),
         address: selectedAddress || place.trim(),
-        lat: selectedCoordinate?.latitude ?? null,
-        lng: selectedCoordinate?.longitude ?? null,
+        area: area || null,
+        lat: coordinate?.latitude ?? null,
+        lng: coordinate?.longitude ?? null,
         capacity: parseInt(capacity, 10) || 10,
         accessibility: access,
         imageUri: selectedImage?.uri || null,
@@ -686,6 +735,7 @@ export default function CreateEventScreen({ navigation }) {
           setPlace(value);
           setSelectedCoordinate(null);
           setSelectedAddress('');
+          setSelectedArea('');
         }}
         placeholder="Add a place or address"
         placeholderTextColor={colors.muted}
@@ -851,6 +901,7 @@ export default function CreateEventScreen({ navigation }) {
               onPress={(event) => {
                 setSelectedCoordinate(event.nativeEvent.coordinate);
                 setSelectedAddress('');
+                setSelectedArea('');
               }}
             >
               {selectedCoordinate && (
@@ -884,6 +935,7 @@ export default function CreateEventScreen({ navigation }) {
 
       <ConfirmModal
         visible={done}
+        title="Event published!"
         message="Your event is now listed under Hosting in My events."
         onConfirm={() => {
           setDone(false);

@@ -1,39 +1,51 @@
-# 2gether
+# 2Gether
 
-A social event app built with **React Native + Expo**. Discover local events, join the ones you like, chat with organizers, host your own — and get the whole thing on your phone with Expo Go.
+A mobile app that connects people through casual, community-driven sports and outdoor events. Find an event that matches your level and accessibility needs, join it, talk to the organizer, host your own and review it afterwards.
 
 > Find what fits. Go together.
 
+Built with **React Native + Expo** and a **Supabase** backend (auth, database, storage, realtime) for the *Interação Pessoa-Máquina 2026/27* course at NOVA FCT (Lab class P1, Group 1).
+
 ## Features
 
-### 🔥 For you *(home tab)*
-- Personalized feed with a greeting and your interest tags
-- Events matching your interests surfaced first, then everything else
+### 🏠 Home
+- Greeting and **suggested events** ranked by your interests
+- **Feed** of reviews and photos from past events
 
 ### 🔍 Search
 - Search by name, place, area or sport
-- Filter by category, level and accessibility (wheelchair friendly, flat terrain, …)
-- **List / Map view toggle** — see matching events on a real map; tap a pin for details
+- Filter by category, level and accessibility (wheelchair friendly, flat terrain, low intensity, all ages)
+- **List / Map view toggle**: tap a pin to open the event
 
 ### 📅 My events
-- Upcoming events you're going to, and the ones you host
-- Past events with a **star review** flow
-- Create your own event (name, category, level, accessibility, date, time, location, capacity)
+- **Upcoming**: events you're going to and events you host
+- **Past**: events you attended, with a **Review** button (★ rating shown once reviewed)
+- **Create event**: name, category, level, accessibility tags, date & time pickers, location picked on a map (with address search), capacity and an optional photo
+
+### 📍 Event detail
+- Host, date, place, participants, spots left and accessibility badges
+- **Join** / **Cancel participation**
+- **Waitlist** when the event is full (you get a notification when a spot opens)
+- **Message organizer**, available before joining. Hosts get **View chats** with every participant.
+- After the event: **Leave a review** opens the review screen (also reachable from My events → Past → Review)
+
+### ⭐ Review
+- Star rating (starts empty), written review and optional photo
+- **"Was the accessibility info accurate?"** (Yes / Partly / No), only for events with accessibility tags, shown on the review afterwards
 
 ### 🔔 Notifications *(badge on the tab)*
-- Join confirmations, "someone joined your event" alerts, event reminders
-- Mark read / mark all read / delete / clear all, unread badge on the tab bar
+- Someone joined your event, new messages, spot available on a waitlist, event created
+- Tap to open the related event or chat, mark one/all as read, delete one, **clear all**
+- Realtime: new notifications appear without refreshing
 
 ### 👤 Profile
-- Edit name and bio, interests, member stats
-- Gamified **badges** (first event, social butterfly, organizer, …)
-- Attended events and received reviews
-- Settings: language, theme, log out, delete account
+- Photo (avatar upload), name, bio and interests (editable)
+- Gamified **badges** (First Event, Social Butterfly, Host)
+- Attended events, received reviews and average rating
+- Settings, log out
 
-### Plus
-- **Event detail** — participants, spots left, accessibility badges, join/cancel
-- **Group chat** — message the organizer, canned auto-replies
-- **Auth flow** — login / sign-up with inline validation (mock, no backend)
+### 🔐 Auth
+- Sign up / log in with email and password (Supabase Auth), with inline validation and password rules
 
 ## Tech stack
 
@@ -41,30 +53,45 @@ A social event app built with **React Native + Expo**. Discover local events, jo
 |---|---|
 | Framework | React Native 0.88 · React 19.3 · Expo SDK 58 |
 | Navigation | React Navigation 7 (native-stack + bottom tabs) |
+| Backend | Supabase (Postgres + Row Level Security, Auth, Storage, Realtime) |
 | Maps | `react-native-maps` (Apple Maps on iOS, Google Maps on Android) |
+| Media | `expo-image-picker`, `expo-image-manipulator` |
 | Icons | `@expo/vector-icons` (Ionicons) |
 | State | React Context (`src/context/AppContext.js`) |
-| Data | Mock data — no backend required |
 
 ## Requirements
 
 - **Node.js 18+** and npm
-- **Expo Go** on your phone (iOS/Android), or a simulator/emulator
+- **Expo Go** on your phone (Android/iOS), or an emulator/simulator
 - Phone and computer on the same Wi-Fi (or use tunnel mode, see below)
+- A `.env` file with the Supabase credentials (see below)
 
 ## Getting started
+
+### 1. Supabase credentials
+
+Create a `.env` file in the project root (it is git-ignored):
+
+```
+EXPO_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+Without it the app cannot start. Ask a group member for the values.
+
+### 2. Install and run
 
 ```bash
 npm install      # install dependencies
 npm start        # start the Expo dev server
 ```
 
-Then scan the QR code with Expo Go, or run a specific target:
+Scan the QR code with Expo Go, or run a specific target:
 
 ```bash
-npm run ios       # iOS simulator
 npm run android   # Android emulator
-npm run web       # browser
+npm run ios       # iOS simulator
+npm run web       # browser (no maps, see Platform notes)
 ```
 
 If your phone can't reach the dev server (different network, VPN, …):
@@ -73,44 +100,73 @@ If your phone can't reach the dev server (different network, VPN, …):
 npx expo start --tunnel
 ```
 
-If anything looks stale after pulling changes (missing icons, old UI):
+If anything looks stale after pulling changes:
 
 ```bash
 npx expo start --clear   # restart with a cleared Metro cache
 ```
 
+## Test data for the evaluation scenarios
+
+`supabase/seed.sql` fills the database with events, participations, reviews, a chat and notifications that cover the three usability scenarios:
+
+1. **Discover an event, join it and contact the organizer.** *Padel for Absolute Beginners* in Barreiro next Saturday at 10:00, plus look-alike events at other levels and in other areas.
+2. **Create and manage a community event.** The tester hosts *Morning Stretch & Walk* and has several "someone joined your event" notifications to view and clear.
+3. **Review past events and cancel a future participation.** *Evening River Run* (past, not reviewed yet) and *Riverside 5K Run* (upcoming, already joined).
+
+Setup:
+
+1. In Supabase → **Authentication → Users → Add user** (tick *Auto Confirm User*), create:
+   `joao@2gether.test` (the tester), `maya@2gether.test` and `paul@2gether.test`.
+2. In Supabase → **SQL Editor**, run `supabase/avatar.sql` (profile photos), `supabase/notifications.sql` (notify hosts when someone joins) and `supabase/reviews_accessibility.sql` (accessibility question in reviews) once, then run `supabase/seed.sql`.
+3. Log in as `joao@2gether.test`.
+
+`seed.sql` creates the database function `public.reset_test_data()` and schedules it with `pg_cron` to run **every day at 04:00 UTC**, so the test data (with dates relative to that day) is always fresh, whenever the app is evaluated. It only deletes and recreates the rows of the three test accounts.
+
+To reset the test data immediately, run in the SQL Editor:
+
+```sql
+select public.reset_test_data();
+```
+
 ## Project structure
 
 ```
-App.js                     # navigation, tab bar, icon font preload, web alert shim
+App.js                     # root navigator (auth stack vs. app stack), web alert shim
+lib/supabase.js            # Supabase client (reads .env)
+supabase/
+  avatar.sql               # avatars bucket + profiles.avatar_path column
+  notifications.sql        # trigger: notify the host when someone joins their event
+  reviews_accessibility.sql # reviews.accessibility_accuracy (yes / partly / no)
+  seed.sql                 # test data for the scenarios + daily automatic reset (pg_cron)
 src/
-  context/AppContext.js    # global state: auth, events, chats, notifications, badges
-  data/
-    mock.js                # seed events, notifications, chats, reviews
-    options.js             # categories, levels, accessibility options
+  context/AppContext.js    # global state + all Supabase calls (auth, events, chats, notifications, reviews, badges)
+  navigation/              # bottom tabs and shared header
+  data/options.js          # categories, levels, accessibility options
   theme/index.js           # colors, spacing, radii, level colors
   components/
     common/                # Avatar, Button, Chip, ConfirmModal, Logo, Stars
     events/                # EventCard, AccessibilityBadge, EventMap (+ .web fallback)
-  screens/                 # 12 screens (auth, tabs, event detail, chat, create, …)
+  screens/                 # Login, SignUp, Home, Explore (Search), MyEvents, Notifications,
+                           # Profile, Settings, EventDetail, CreateEvent, Chat, EventChats
 assets/                    # app icon, splash, favicon, Android adaptive icons
 ```
 
 ## Platform notes
 
-- **iOS / Android (Expo Go)** — full experience, including the map view. Maps need no API keys in Expo Go.
-- **Web** — works for everything except maps: the Map view shows a placeholder card, and system dialogs are routed to the browser.
-- **No backend** — login accepts any well-formed email; data resets on reload. All state lives in `AppContext`.
+- **Android / iOS (Expo Go)**: full experience, including maps. No map API keys are needed in Expo Go.
+- **Web**: everything except maps. The map view shows a placeholder, and system dialogs use the browser's `alert`/`confirm`.
 
-## Quality checks
+## Not implemented yet
 
-```bash
-npx expo export --platform ios --platform android --platform web   # production bundles
-npx expo-doctor                                                     # dependency health
-```
+These parts of the interface are visible but are placeholders:
 
-Both should pass with no errors.
+- Settings: language, time format, accessibility, theme and notification preferences ("Coming soon")
+- Search: "Change area" / distance radius, and a date filter
+- "Forgot password?" only shows a message, no email is sent
+- "Delete account" only logs out
+- Hosts cannot edit or cancel an event after creating it
 
 ## License
 
-MIT — based on the [Expo](https://expo.dev) template (see `LICENSE`).
+MIT, based on the [Expo](https://expo.dev) template (see `LICENSE`).

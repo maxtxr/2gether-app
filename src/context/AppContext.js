@@ -13,7 +13,8 @@ import { supabase } from '../../lib/supabase';
 
 const AppContext = createContext(null);
 
-function getEventDate(event) {
+// Converte o "when" do evento (DD/MM/YYYY, HH:mm) num Date
+export function getEventDate(event) {
   const value = event?.when || event?.date;
   if (!value) return null;
 
@@ -36,7 +37,8 @@ function getEventDate(event) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function eventHasEnded(event) {
+// true se a data do evento já passou
+export function eventHasEnded(event) {
   const date = getEventDate(event);
   if (!date) return !!event?.past;
   return date < new Date();
@@ -396,6 +398,7 @@ export function AppProvider({ children }) {
           userId: review.user_id,
           content: review.content,
           rating: review.rating,
+          accessibilityAccuracy: review.accessibility_accuracy,
           imageUrl,
           author: profile?.name || 'Unknown',
           eventTitle: event?.title || 'Event',
@@ -796,21 +799,8 @@ export function AppProvider({ children }) {
       ],
     }));
 
-    const event = events.find((e) => e.id === eventId);
-
-    if (event?.host_id && event.host_id !== user.id) {
-      try {
-        await pushNotification({
-          userId: event.host_id,
-          title: 'Someone joined your event',
-          message: `${user.name} joined "${event.title}".`,
-          type: 'event',
-          eventId,
-        });
-      } catch (notifyError) {
-        console.error('Could not notify host:', notifyError.message);
-      }
-    }
+    // O organizador é notificado pela base de dados
+    // (trigger_notify_host_on_join, ver supabase/notifications.sql).
   };
 
 
@@ -839,7 +829,8 @@ export function AppProvider({ children }) {
       ),
     }));
 
-    const event = events.find((e) => e.id === eventId);
+    // Quem está na lista de espera é notificado pela base de dados
+    // (trigger_notify_waitlist).
   };
 
   // Criar evento
@@ -958,6 +949,8 @@ export function AppProvider({ children }) {
     const content = (review.content || '').trim();
     const rating = Number(review.rating);
     const imageUri = review.imageUri || null;
+    // 'yes' | 'partly' | 'no' — só para eventos com tags de acessibilidade
+    const accessibilityAccuracy = review.accessibilityAccuracy || null;
 
     if (!content) {
       throw new Error('Please write your review.');
@@ -998,6 +991,7 @@ export function AppProvider({ children }) {
         content,
         rating,
         image_path: imagePath,
+        accessibility_accuracy: accessibilityAccuracy,
       })
       .select()
       .single();
@@ -1020,6 +1014,7 @@ export function AppProvider({ children }) {
       userId: data.user_id,
       content: data.content,
       rating: data.rating,
+      accessibilityAccuracy: data.accessibility_accuracy,
       imageUrl: imagePath
         ? supabase.storage
             .from('review-images')
@@ -1260,33 +1255,7 @@ export function AppProvider({ children }) {
       ],
     }));
 
-    try {
-      const { data: conversation, error: conversationError } = await supabase
-        .from('conversations')
-        .select('host_id, participant_id, event_id')
-        .eq('id', conversationId)
-        .single();
-
-      if (conversationError) throw conversationError;
-
-      const recipientId =
-        conversation.host_id === user.id
-          ? conversation.participant_id
-          : conversation.host_id;
-
-      if (recipientId && recipientId !== user.id) {
-        await pushNotification({
-          userId: recipientId,
-          title: 'New message',
-          message: `${user.name}: ${trimmedMessage.slice(0, 80)}`,
-          type: 'message',
-          eventId: conversation.event_id,
-          conversationId,
-        });
-      }
-    } catch (notifyError) {
-      console.error('Could not notify message recipient:', notifyError.message);
-    }
+    // O destinatário é notificado pela base de dados (trigger on_new_message).
 
     return data;
   };

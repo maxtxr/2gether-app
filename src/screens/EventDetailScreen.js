@@ -6,19 +6,13 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  TextInput,
-  Pressable,
   Image,
-  ActivityIndicator,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system/legacy';
 
 import { colors, levelColors } from '../theme';
-import { useApp } from '../context/AppContext';
+import { useApp, eventHasEnded } from '../context/AppContext';
 import {
   Avatar,
   initials,
@@ -36,24 +30,55 @@ export default function EventDetailScreen({ route, navigation }) {
     hostedIds,
     user,
     reviews,
+    participants,
     countOf,
     spotsLeft,
     joinEvent,
     leaveEvent,
-    addReview,
     getOrCreateConversation,
   } = useApp();
 
   const event = events.find((e) => e.id === route.params.id);
 
+  // Janela de resultado: { title, message, variant }
   const [modal, setModal] = useState(null);
-  const [reviewText, setReviewText] = useState('');
-  const [rating, setRating] = useState(5);
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [isOnWaitlist, setIsOnWaitlist] = useState(false);
   const [isUpdatingWaitlist, setIsUpdatingWaitlist] = useState(false);
+  const [participantNames, setParticipantNames] = useState({});
+
+  // Nomes dos participantes, para mostrar as iniciais
+  const participantIds = (event && participants[event.id]) || [];
+  const participantKey = participantIds.join(',');
+
+  useEffect(() => {
+    if (!participantKey) return;
+
+    let mounted = true;
+
+    supabase
+      .from('profiles')
+      .select('id, name')
+      .in('id', participantKey.split(','))
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Error loading participants:', error.message);
+          return;
+        }
+
+        if (mounted) {
+          setParticipantNames(
+            Object.fromEntries((data || []).map((p) => [p.id, p.name]))
+          );
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [participantKey]);
 
   useEffect(() => {
     let mounted = true;
@@ -98,33 +123,63 @@ export default function EventDetailScreen({ route, navigation }) {
   const left = spotsLeft(event);
   const full = left <= 0 && !going;
 
-  // Verificar se o evento já terminou
-  const dateMatch = (event.when || '').match(
-    /^(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{2}):(\d{2})$/
-  );
+  const eventEnded = eventHasEnded(event);
 
-  const eventDate = dateMatch
-    ? new Date(
-        Number(dateMatch[3]),
-        Number(dateMatch[2]) - 1,
-        Number(dateMatch[1]),
-        Number(dateMatch[4]),
-        Number(dateMatch[5])
-      )
-    : null;
+  const showError = (error, fallback) =>
+    setModal({
+      title: 'Something went wrong',
+      message: error?.message || fallback,
+      variant: 'danger',
+    });
 
-  const eventEnded = eventDate
-    ? eventDate < new Date()
-    : !!event.past;
+  // Entrar no evento (espera pela resposta do servidor)
+  const join = async () => {
+    try {
+      setIsJoining(true);
+      await joinEvent(event.id);
 
-  console.log('EVENT WHEN:', event.when);
-  console.log('EVENT DATE:', eventDate);
-  console.log('EVENT ENDED:', eventEnded);
-  console.log('HOSTING:', hosting);
-  console.log('GOING:', going);
-  console.log('CURRENT USER ID:', user?.id);
-  console.log('EVENT HOST ID:', event.host_id);
-  console.log('HOSTED IDS:', hostedIds);
+      // Remover da lista de espera depois de entrar
+      const { error } = await supabase
+        .from('event_waitlist')
+        .delete()
+        .eq('event_id', event.id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error leaving waitlist:', error.message);
+      }
+
+      setIsOnWaitlist(false);
+      setModal({
+        title: "You're going!",
+        message: `You joined ${event.title}. See you there!`,
+      });
+    } catch (error) {
+      console.error('Error joining event:', error);
+      showError(error, 'Could not join the event. Please try again.');
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  // Cancelar a participação, depois de o utilizador confirmar
+  const leave = async () => {
+    setConfirmLeave(false);
+
+    try {
+      setIsLeaving(true);
+      await leaveEvent(event.id);
+      setModal({
+        title: 'Participation cancelled',
+        message: `You are no longer going to ${event.title}.`,
+      });
+    } catch (error) {
+      console.error('Error leaving event:', error);
+      showError(error, 'Could not cancel your participation. Please try again.');
+    } finally {
+      setIsLeaving(false);
+    }
+  };
 
   const eventReviews = reviews[event.id] || [];
 
@@ -132,14 +187,18 @@ export default function EventDetailScreen({ route, navigation }) {
     (review) => review.userId === user?.id
   );
 
-  const shown = (event.people || []).slice(0, 3);
-
-  if (going) shown.unshift('ME');
+  // Até 4 avatares: "ME" primeiro (se for o caso), depois os outros pelas iniciais
+  const MAX_AVATARS = 4;
+  const others = participantIds
+    .filter((id) => id !== user?.id)
+    .map((id) => participantNames[id] || '?');
+  const shown = [...(going ? ['ME'] : []), ...others.map((name) => initials(name) || '?')]
+    .slice(0, MAX_AVATARS);
 
   // Entrar ou sair da lista de espera
   const toggleWaitlist = async () => {
     if (!user) {
-      setModal('You must be logged in to join the waitlist.');
+      showError(null, 'You must be logged in to join the waitlist.');
       return;
     }
 
@@ -156,7 +215,10 @@ export default function EventDetailScreen({ route, navigation }) {
         if (error) throw error;
 
         setIsOnWaitlist(false);
-        setModal('You have left the waitlist.');
+        setModal({
+          title: 'Left the waitlist',
+          message: "You won't be notified when a spot opens.",
+        });
       } else {
         const { error } = await supabase
           .from('event_waitlist')
@@ -168,108 +230,16 @@ export default function EventDetailScreen({ route, navigation }) {
         if (error) throw error;
 
         setIsOnWaitlist(true);
-        setModal('You have joined the waitlist!');
+        setModal({
+          title: "You're on the waitlist",
+          message: "We'll notify you if a spot opens up.",
+        });
       }
     } catch (error) {
       console.error('Waitlist error:', error);
-      setModal(error.message || 'Could not update the waitlist.');
+      showError(error, 'Could not update the waitlist.');
     } finally {
       setIsUpdatingWaitlist(false);
-    }
-  };
-
-  // Escolher e preparar fotografia
-  const pickReviewImage = async () => {
-    try {
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permission.granted) {
-        Alert.alert(
-          'Permission required',
-          'Please allow access to your photo library.'
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 1,
-      });
-
-      if (result.canceled) return;
-
-      setIsProcessingImage(true);
-
-      const asset = result.assets[0];
-
-      const qualities = [0.7, 0.55, 0.4];
-
-      for (const quality of qualities) {
-        const manipulated = await ImageManipulator.manipulateAsync(
-          asset.uri,
-          [{ resize: { width: 1100 } }],
-          {
-            compress: quality,
-            format: ImageManipulator.SaveFormat.JPEG,
-          }
-        );
-
-        const info = await FileSystem.getInfoAsync(manipulated.uri);
-
-        if (info.exists && info.size <= 1024 * 1024) {
-          setSelectedImage(manipulated);
-          setIsProcessingImage(false);
-          return;
-        }
-      }
-
-      Alert.alert(
-        'Image too large',
-        'Could not compress this image below 1 MB. Please choose another one.'
-      );
-
-    } catch (error) {
-      console.error('Error selecting review image:', error);
-      Alert.alert('Error', 'Could not prepare the selected image.');
-    } finally {
-      setIsProcessingImage(false);
-    }
-  };
-
-  // Publicar review
-  const submitReview = async () => {
-    if (!reviewText.trim()) {
-      Alert.alert('Missing review', 'Please write something about the event.');
-      return;
-    }
-
-    try {
-      setIsSubmittingReview(true);
-
-      await addReview(event.id, {
-        content: reviewText,
-        rating,
-        imageUri: selectedImage?.uri || null,
-      });
-
-      setReviewText('');
-      setRating(5);
-      setSelectedImage(null);
-
-      Alert.alert('Review published', 'Your review has been published!');
-
-    } catch (error) {
-      console.error('Error publishing review:', error);
-
-      Alert.alert(
-        'Could not publish review',
-        error.message || 'Something went wrong.'
-      );
-    } finally {
-      setIsSubmittingReview(false);
     }
   };
 
@@ -342,10 +312,16 @@ export default function EventDetailScreen({ route, navigation }) {
       )}
 
       <View style={styles.partHeader}>
-        <Text style={styles.partTitle}>{count} participants</Text>
-        <Text style={styles.partSub}>
-          {left > 0 ? `${left} spots left` : 'Full'} · {event.capacity} max
+        <Text style={styles.partTitle}>
+          {eventEnded
+            ? `${count} ${count === 1 ? 'person' : 'people'} went`
+            : `${count} ${count === 1 ? 'participant' : 'participants'}`}
         </Text>
+        {!eventEnded && (
+          <Text style={styles.partSub}>
+            {left > 0 ? `${left} ${left === 1 ? 'spot' : 'spots'} left` : 'Full'} · {event.capacity} max
+          </Text>
+        )}
       </View>
 
       <View style={styles.avatars}>
@@ -362,12 +338,10 @@ export default function EventDetailScreen({ route, navigation }) {
         <>
           {going ? (
             <Button
-              title="Cancel participation"
+              title={isLeaving ? 'Cancelling…' : 'Cancel participation'}
               variant="danger"
-              onPress={() => {
-                leaveEvent(event.id);
-                setModal('You are no longer going to this event.');
-              }}
+              disabled={isLeaving}
+              onPress={() => setConfirmLeave(true)}
               style={{ marginTop: 20 }}
             />
           ) : full ? (
@@ -404,33 +378,32 @@ export default function EventDetailScreen({ route, navigation }) {
             </View>
           ) : (
             <Button
-              title="Join"
-              onPress={async () => {
-                try {
-                  await joinEvent(event.id);
-
-                  // Remover da lista de espera depois de entrar
-                  const { error } = await supabase
-                    .from('event_waitlist')
-                    .delete()
-                    .eq('event_id', event.id)
-                    .eq('user_id', user.id);
-
-                  if (error) {
-                    console.error('Error leaving waitlist:', error.message);
-                  }
-
-                  setIsOnWaitlist(false);
-                  setModal(`You're going to ${event.title}!`);
-                } catch (error) {
-                  console.error('Error joining event:', error);
-                  setModal(error.message);
-                }
-              }}
+              title={isJoining ? 'Joining…' : 'Join'}
+              disabled={isJoining}
+              onPress={join}
               style={{ marginTop: 20 }}
             />
           )}
         </>
+      )}
+
+      {/* Evento passado: atalho para o ecrã da review */}
+      {eventEnded && going && !myReview && (
+        <Button
+          title="Leave a review"
+          icon="star-outline"
+          onPress={() => navigation.navigate('Review', { id: event.id })}
+          style={{ marginTop: 20 }}
+        />
+      )}
+
+      {eventEnded && myReview && (
+        <View style={styles.alreadyReviewed}>
+          <Ionicons name="checkmark-circle" size={22} color={colors.green} />
+          <Text style={styles.alreadyReviewedText}>
+            You rated this event {'★'.repeat(myReview.rating)}
+          </Text>
+        </View>
       )}
 
       {event.host_id && user && (
@@ -461,124 +434,6 @@ export default function EventDetailScreen({ route, navigation }) {
         />
       )}
 
-      {/* REVIEW FORM */}
-      {eventEnded && going && !myReview && (
-        <View style={styles.reviewSection}>
-          <Text style={styles.reviewTitle}>Share your experience</Text>
-
-          <Text style={styles.reviewSubtitle}>
-            How was this event? Let others know!
-          </Text>
-
-          <Text style={styles.ratingLabel}>Your rating</Text>
-
-          <View style={styles.stars}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Pressable
-                key={star}
-                onPress={() => setRating(star)}
-                disabled={isSubmittingReview}
-              >
-                <Ionicons
-                  name={star <= rating ? 'star' : 'star-outline'}
-                  size={34}
-                  color={colors.orange}
-                />
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={styles.ratingText}>{rating} out of 5</Text>
-
-          <TextInput
-            style={styles.reviewInput}
-            placeholder="Tell us about your experience..."
-            placeholderTextColor={colors.muted}
-            value={reviewText}
-            onChangeText={setReviewText}
-            multiline
-            textAlignVertical="top"
-            maxLength={1000}
-            editable={!isSubmittingReview}
-          />
-
-          <Text style={styles.charCount}>
-            {reviewText.length}/1000
-          </Text>
-
-          <Text style={styles.ratingLabel}>Add a photo (optional)</Text>
-
-          <Pressable
-            style={styles.photoButton}
-            onPress={pickReviewImage}
-            disabled={isProcessingImage || isSubmittingReview}
-          >
-            {selectedImage ? (
-              <Image
-                source={{ uri: selectedImage.uri }}
-                style={styles.photoPreview}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.photoPlaceholder}>
-                <Ionicons
-                  name="camera-outline"
-                  size={28}
-                  color={colors.green}
-                />
-                <Text style={styles.photoText}>
-                  {isProcessingImage ? 'Preparing photo...' : 'Add a photo'}
-                </Text>
-                <Text style={styles.photoHint}>JPEG · Maximum 1 MB</Text>
-              </View>
-            )}
-          </Pressable>
-
-          {selectedImage && (
-            <Pressable
-              onPress={() => setSelectedImage(null)}
-              disabled={isSubmittingReview}
-              style={styles.removePhoto}
-            >
-              <Text style={styles.removePhotoText}>Remove photo</Text>
-            </Pressable>
-          )}
-
-          <Pressable
-            style={[
-              styles.publishButton,
-              (isSubmittingReview || isProcessingImage) &&
-                styles.disabledButton,
-            ]}
-            onPress={submitReview}
-            disabled={isSubmittingReview || isProcessingImage}
-          >
-            {isSubmittingReview ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.publishText}>Publish review</Text>
-            )}
-          </Pressable>
-        </View>
-      )}
-
-      {myReview && (
-        <View style={styles.alreadyReviewed}>
-          <Ionicons name="checkmark-circle" size={22} color={colors.green} />
-          <Text style={styles.alreadyReviewedText}>
-            You have already reviewed this event.
-          </Text>
-        </View>
-      )}
-
-      {eventEnded && !going && !hosting && (
-        <View style={styles.alreadyReviewed}>
-          <Text style={styles.reviewSubtitle}>
-            Only event participants can publish a review.
-          </Text>
-        </View>
-      )}
-
       {/* EXISTING REVIEWS */}
       {eventReviews.length > 0 && (
         <View style={styles.existingReviews}>
@@ -605,6 +460,13 @@ export default function EventDetailScreen({ route, navigation }) {
 
               <Text style={styles.reviewContent}>{review.content}</Text>
 
+              {review.accessibilityAccuracy && (
+                <Text style={styles.reviewAccuracy}>
+                  Accessibility info:{' '}
+                  {{ yes: 'accurate', partly: 'partly accurate', no: 'not accurate' }[review.accessibilityAccuracy]}
+                </Text>
+              )}
+
               {review.imageUrl && (
                 <Image
                   source={{ uri: review.imageUrl }}
@@ -618,8 +480,21 @@ export default function EventDetailScreen({ route, navigation }) {
       )}
 
       <ConfirmModal
+        visible={confirmLeave}
+        variant="danger"
+        title="Cancel participation?"
+        message={`You will lose your spot in ${event.title}.`}
+        confirmText="Yes, cancel"
+        cancelText="Keep my spot"
+        onConfirm={leave}
+        onCancel={() => setConfirmLeave(false)}
+      />
+
+      <ConfirmModal
         visible={!!modal}
-        message={modal}
+        title={modal?.title}
+        message={modal?.message}
+        variant={modal?.variant}
         onConfirm={() => setModal(null)}
       />
     </ScrollView>
@@ -917,6 +792,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
+  reviewAccuracy: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
   reviewImage: {
     width: '100%',
     height: 190,

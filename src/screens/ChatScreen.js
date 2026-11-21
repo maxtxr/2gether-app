@@ -17,8 +17,8 @@ import { useApp } from '../context/AppContext';
 import { Avatar } from '../components';
 import { supabase } from '../../lib/supabase';
 
-export default function ChatScreen({ route }) {
-  const { events, chats, loadMessages, markConversationRead , sendMessage, countOf } = useApp();
+export default function ChatScreen({ route, navigation }) {
+  const { events, chats, loadMessages, markConversationRead, sendMessage } = useApp();
 
   const { conversationId, eventId, otherName } = route.params;
 
@@ -30,6 +30,13 @@ export default function ChatScreen({ route }) {
 
   const listRef = useRef(null);
 
+  // Conversa privada entre um participante e o organizador
+  useEffect(() => {
+    navigation.setOptions({
+      title: otherName ? `Chat with ${otherName}` : 'Chat',
+    });
+  }, [navigation, otherName]);
+
   useEffect(() => {
     if (!conversationId) return;
 
@@ -38,7 +45,7 @@ export default function ChatScreen({ route }) {
         await markConversationRead(conversationId);
         await loadMessages(conversationId);
       } catch (error) {
-        console.log('Error loading messages:', error.message);
+        console.error('Error loading messages:', error.message);
       }
     };
 
@@ -101,11 +108,11 @@ export default function ChatScreen({ route }) {
       keyboardVerticalOffset={90}
     >
       <View style={styles.header}>
-        <Avatar label="👥" size={40} />
-        <View style={{ marginLeft: 8 }}>
-          <Text style={styles.title}>{event.title}</Text>
-          <Text style={styles.sub}>
-            {countOf(event)} participants · {event.short}
+        <Avatar name={otherName || event.host} size={40} />
+        <View style={{ marginLeft: 8, flex: 1 }}>
+          <Text style={styles.title}>{otherName || event.host}</Text>
+          <Text style={styles.sub} numberOfLines={1}>
+            About {event.title} · {event.short}
           </Text>
         </View>
       </View>
