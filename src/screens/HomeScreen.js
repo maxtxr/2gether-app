@@ -1,4 +1,3 @@
-
 import {
   View,
   Text,
@@ -11,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
 import { EventCard } from '../components';
+import { useState } from 'react'
+
 
 export default function HomeScreen({ navigation }) {
   const { user, events, reviews } = useApp();
@@ -33,13 +34,19 @@ export default function HomeScreen({ navigation }) {
 
   const suggested = [...picked, ...rest].slice(0, 6);
 
-  // Juntar todas as reviews de todos os eventos
-  const feedReviews = Object.values(reviews || {})
+  // Mostrar 10 reviews de cada vez
+  const [visibleReviewsCount, setVisibleReviewsCount] = useState(10);
+
+  const allFeedReviews = Object.values(reviews || {})
     .flat()
     .sort(
       (a, b) =>
         new Date(b.createdAt) - new Date(a.createdAt)
     );
+
+  const feedReviews = allFeedReviews.slice(0, visibleReviewsCount);
+
+  const hasMoreReviews = visibleReviewsCount < allFeedReviews.length;
 
   const open = (id) =>
     navigation.navigate('EventDetail', { id });
@@ -127,11 +134,12 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* Reviews */}
-      {feedReviews.length > 0 ? (
+    {feedReviews.length > 0 ? (
+      <>
         <View style={styles.reviewsList}>
           {feedReviews.map((review) => (
             <View key={review.id} style={styles.reviewCard}>
-              
+
               {/* Author */}
               <View style={styles.reviewHeader}>
                 <View style={styles.avatar}>
@@ -208,26 +216,45 @@ export default function HomeScreen({ navigation }) {
             </View>
           ))}
         </View>
-      ) : (
-        <View style={styles.emptyFeed}>
-          <View style={styles.emptyFeedIcon}>
-            <Ionicons
-              name="images-outline"
-              size={30}
-              color={colors.green}
-            />
-          </View>
 
-          <Text style={styles.emptyFeedTitle}>
-            Nothing to see yet
-          </Text>
-
-          <Text style={styles.emptyFeedText}>
-            Reviews and photos from events will appear here.
-            Join an event and share your experience!
-          </Text>
+        {/* Load more / End of feed */}
+        <View style={styles.loadMoreContainer}>
+          {hasMoreReviews ? (
+            <Text
+              style={styles.loadMoreText}
+              onPress={() =>
+                setVisibleReviewsCount((current) => current + 10)
+              }
+            >
+              Load more
+            </Text>
+          ) : (
+            <Text style={styles.endFeedText}>
+              You've reached the end of the feed.
+            </Text>
+          )}
         </View>
-      )}
+      </>
+    ) : (
+      <View style={styles.emptyFeed}>
+        <View style={styles.emptyFeedIcon}>
+          <Ionicons
+            name="images-outline"
+            size={30}
+            color={colors.green}
+          />
+        </View>
+
+        <Text style={styles.emptyFeedTitle}>
+          Nothing to see yet
+        </Text>
+
+        <Text style={styles.emptyFeedText}>
+          Reviews and photos from events will appear here.
+          Join an event and share your experience!
+        </Text>
+      </View>
+    )}
     </ScrollView>
   );
 }
@@ -452,5 +479,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 19,
+  },
+
+  loadMoreContainer: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+
+  loadMoreText: {
+    color: colors.green,
+    fontSize: 14,
+    fontWeight: '700',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+
+  endFeedText: {
+    color: colors.muted,
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 12,
   },
 });

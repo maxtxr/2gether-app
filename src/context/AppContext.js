@@ -840,31 +840,6 @@ export function AppProvider({ children }) {
     }));
 
     const event = events.find((e) => e.id === eventId);
-
-    try {
-      const { data: waitlist, error: waitlistError } = await supabase
-        .from('event_waitlist')
-        .select('user_id')
-        .eq('event_id', eventId);
-
-      if (waitlistError) throw waitlistError;
-
-      await Promise.all(
-        (waitlist || [])
-          .filter((entry) => entry.user_id !== user.id)
-          .map((entry) =>
-            pushNotification({
-              userId: entry.user_id,
-              title: 'Spot available',
-              message: `A spot opened up in "${event?.title || 'an event'}". Join now!`,
-              type: 'event',
-              eventId,
-            })
-          )
-      );
-    } catch (notifyError) {
-      console.error('Could not notify waitlist:', notifyError.message);
-    }
   };
 
   // Criar evento
