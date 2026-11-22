@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,6 +21,15 @@ export default function MyEventsScreen({ navigation }) {
   } = useApp();
 
   const [tab, setTab] = useState('Upcoming');
+  const [, setCurrentTime] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Eventos em que participo e que ainda não terminaram
   const going = events.filter(

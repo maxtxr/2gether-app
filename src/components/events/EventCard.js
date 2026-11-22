@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme';
 import { useApp, eventHasEnded } from '../../context/AppContext';
 import ConfirmModal from '../common/ConfirmModal';
@@ -43,8 +43,8 @@ export default function EventCard({ event, onPress, right }) {
       >
       {/* Sport Category Icon Container */}
       <View style={styles.categoryIconBox}>
-        <Ionicons
-          name={event.icon || 'tennisball-outline'}
+        <MaterialCommunityIcons
+          name={event.icon || 'calendar-star'}
           size={24}
           color={colors.green}
         />
@@ -215,8 +215,11 @@ const styles = StyleSheet.create({
   },
   actionContainer: {
     marginLeft: spacing.sm,
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 58,
   },
+
   joinButton: {
     width: 38,
     height: 38,
@@ -225,23 +228,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   joinButtonPressed: {
     opacity: 0.8,
   },
+
   badge: {
+    minWidth: 58,
+    height: 32,
     borderRadius: radii.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+
   badgeGoing: {
     backgroundColor: colors.green,
   },
+
   badgeHosting: {
     backgroundColor: colors.orange,
   },
+
   badgeText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 11,
   },
 });

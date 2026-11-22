@@ -321,6 +321,7 @@ const styles = StyleSheet.create({
 
   eventsList: {
     paddingHorizontal: 16,
+    paddingTop: 4,
     paddingBottom: 4,
     gap: 12,
   },
@@ -345,7 +346,7 @@ const styles = StyleSheet.create({
 
   feedHeader: {
     marginHorizontal: 16,
-    marginTop: 24,
+    marginTop: 4,
     marginBottom: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',

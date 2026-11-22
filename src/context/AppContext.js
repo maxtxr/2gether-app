@@ -939,6 +939,69 @@ export function AppProvider({ children }) {
     return finalEvent;
   };
 
+  // Update event
+  const updateEvent = async (eventId, eventData) => {
+    if (!user) throw new Error('You must be logged in.');
+
+    const { data, error } = await supabase
+      .from('events')
+      .update(eventData)
+      .eq('id', eventId)
+      .eq('host_id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    setEvents((prev) =>
+      prev.map((event) =>
+        event.id === eventId ? data : event
+      )
+    );
+
+    return data;
+  };
+
+  // Delete event
+  const deleteEvent = async (eventId) => {
+    if (!user) throw new Error('You must be logged in.');
+
+    const { data, error } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', eventId)
+      .eq('host_id', user.id)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    if (!data) {
+      throw new Error('Event not found or you are not the host.');
+    }
+
+    // Atualizar os dados locais
+    setEvents((prev) =>
+      prev.filter((event) => event.id !== eventId)
+    );
+
+    setParticipants((prev) => {
+      const updated = { ...prev };
+      delete updated[eventId];
+      return updated;
+    });
+
+    setGoingIds((prev) =>
+      prev.filter((id) => id !== eventId)
+    );
+
+    setHostedIds((prev) =>
+      prev.filter((id) => id !== eventId)
+    );
+
+    return data;
+  };
+
   // ---------------- REVIEWS ----------------
 
   const addReview = async (eventId, review) => {
@@ -1359,6 +1422,8 @@ export function AppProvider({ children }) {
     joinEvent,
     leaveEvent,
     createEvent,
+    updateEvent,
+    deleteEvent,
 
     addReview,
     getOrCreateConversation,

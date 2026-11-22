@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -10,7 +9,6 @@ import {
   Pressable,
   Platform,
   Modal,
-  Image,
 } from 'react-native';
 
 const MapView = Platform.OS !== 'web'
@@ -20,22 +18,21 @@ const MapView = Platform.OS !== 'web'
 const Marker = Platform.OS !== 'web'
   ? require('react-native-maps').Marker
   : null;
-import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system/legacy';
+
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors, radii } from '../theme';
-import { CATEGORIES, LEVELS, ACCESSIBILITY } from '../data/options';
+import { LEVELS, ACCESSIBILITY } from '../data/options';
 import { useApp } from '../context/AppContext';
 import { Chip, Button, ConfirmModal } from '../components';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import EventCard from '../components/events/EventCard';
 
 // Zona (cidade / concelho) a partir de um resultado do Photon
 const areaFromPhoton = (properties = {}) =>
   properties.city || properties.district || properties.county || properties.state || '';
 
-// Descobre a zona e as coordenadas de um local com o Photon (OpenStreetMap):
-// pelas coordenadas, se existirem, ou pelo texto escrito pelo utilizador.
+// Descobre a zona e as coordenadas de um local com o Photon (OpenStreetMap)
 async function lookupLocation({ coordinate, query }) {
   if (!coordinate && (!query || query.length < 3)) return null;
 
@@ -54,15 +51,68 @@ async function lookupLocation({ coordinate, query }) {
 
   return {
     area: areaFromPhoton(feature.properties),
-    coordinate: { latitude: Number(lat), longitude: Number(lng) },
+    coordinate: {
+      latitude: Number(lat),
+      longitude: Number(lng),
+    },
   };
 }
 
-export default function CreateEventScreen({ navigation }) {
-  const { createEvent } = useApp();
+// Categorias e respetivos ícones e subcategorias.
+const EVENT_CATEGORIES = [
+  {
+    name: 'Fitness',
+    icon: 'dumbbell',
+    subcategories: ['Gym', 'Strength training', 'Functional training'],
+  },
+  {
+    name: 'Outdoors',
+    icon: 'hiking',
+    subcategories: ['Running', 'Walking', 'Cycling', 'Climbing'],
+  },
+  {
+    name: 'Team Sports',
+    icon: 'soccer',
+    subcategories: ['Football', 'Basketball', 'Volleyball', 'Tennis', 'Handball'],
+  },
+  {
+    name: 'Water Sports',
+    icon: 'swim',
+    subcategories: ['Swimming', 'Surfing', 'Paddleboarding'],
+  },
+  {
+    name: 'Wellness',
+    icon: 'yoga',
+    subcategories: ['Yoga', 'Stretching', 'Meditation'],
+  },
+  {
+    name: 'Social',
+    icon: 'account-group',
+    subcategories: ['Social meetup', 'Sports watching', 'Group activity'],
+  },
+  {
+    name: 'Other',
+    icon: 'dots-horizontal-circle-outline',
+    subcategories: [],
+  },
+];
+
+export default function CreateEventScreen({ navigation, route }) {
+  const { createEvent, updateEvent } = useApp();
+
+  const eventToEdit = route?.params?.event;
+  const isEditing = !!eventToEdit;
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Outdoors');
+  const [subcategory, setSubcategory] = useState('');
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showSubcategoryDropdown, setShowSubcategoryDropdown] = useState(false);
+
+  const selectedCategory = EVENT_CATEGORIES.find(
+    (item) => item.name === category
+  );
+
   const [level, setLevel] = useState('Beginner');
   const [description, setDescription] = useState('');
 
@@ -80,10 +130,7 @@ export default function CreateEventScreen({ navigation }) {
 
   const [done, setDone] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Event photo
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Map
   const [showMapPicker, setShowMapPicker] = useState(false);
@@ -104,6 +151,44 @@ export default function CreateEventScreen({ navigation }) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
 
+  useEffect(() => {
+    if (!eventToEdit) return;
+
+    setTitle(eventToEdit.title || '');
+    setCategory(eventToEdit.category || 'Other');
+    setSubcategory(eventToEdit.subcategory || '');
+    setLevel(eventToEdit.level || 'Beginner');
+    setDescription(eventToEdit.description || '');
+
+    setPlace(eventToEdit.place || '');
+    setCapacity(String(eventToEdit.capacity || 10));
+    setAccess(eventToEdit.accessibility || []);
+
+    setSelectedAddress(eventToEdit.address || '');
+    setSelectedArea(eventToEdit.area || '');
+
+    if (eventToEdit.lat != null && eventToEdit.lng != null) {
+      const coordinate = {
+        latitude: eventToEdit.lat,
+        longitude: eventToEdit.lng,
+      };
+
+      setSelectedCoordinate(coordinate);
+      setMapRegion({
+        ...coordinate,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    }
+
+    const dateParts = (eventToEdit.when || '').split(', ');
+    if (dateParts.length === 2) {
+      const [day, month, year] = dateParts[0].split('/').map(Number);
+
+      setDate(new Date(year, month - 1, day));
+      setTime(dateParts[1]);
+    }
+  }, [eventToEdit]);
   const selectedSearchQuery = useRef(null);
 
   const today = new Date();
@@ -115,11 +200,37 @@ export default function CreateEventScreen({ navigation }) {
     );
   };
 
+  const selectedDateTime = (() => {
+    if (!date || !time.trim()) return null;
+
+    const [hours, minutes] = time.split(':').map(Number);
+
+    if (
+      !Number.isInteger(hours) ||
+      !Number.isInteger(minutes) ||
+      hours < 0 ||
+      hours > 23 ||
+      minutes < 0 ||
+      minutes > 59
+    ) {
+      return null;
+    }
+
+    const eventDate = new Date(date);
+    eventDate.setHours(hours, minutes, 0, 0);
+
+    return eventDate;
+  })();
+
+  const isDateTimeValid =
+    selectedDateTime && selectedDateTime > new Date();
+
   const ready =
     title.trim() &&
     place.trim() &&
     date &&
     time.trim() &&
+    isDateTimeValid &&
     Number.isInteger(Number(capacity)) &&
     Number(capacity) > 0;
 
@@ -172,101 +283,6 @@ export default function CreateEventScreen({ navigation }) {
     return `${day}/${month}/${year}`;
   };
 
-  // Pick and compress event photo
-  const pickImage = async () => {
-    try {
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permission.granted) {
-        Alert.alert(
-          'Permission required',
-          'Please allow access to your photo library.'
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 1,
-      });
-
-      if (result.canceled) return;
-
-      const asset = result.assets[0];
-
-      setIsProcessingImage(true);
-
-      const dimensions = [1280, 1100, 950, 800];
-      const qualities = [0.8, 0.7, 0.6, 0.5];
-
-      let compressedImage = null;
-
-      for (const maxDimension of dimensions) {
-        const actions = [];
-
-        const longestSide = Math.max(asset.width, asset.height);
-
-        if (longestSide > maxDimension) {
-          if (asset.width >= asset.height) {
-            actions.push({
-              resize: { width: maxDimension },
-            });
-          } else {
-            actions.push({
-              resize: { height: maxDimension },
-            });
-          }
-        }
-
-        for (const quality of qualities) {
-          const manipulated =
-            await ImageManipulator.manipulateAsync(
-              asset.uri,
-              actions,
-              {
-                compress: quality,
-                format: ImageManipulator.SaveFormat.JPEG,
-              }
-            );
-
-          const info = await FileSystem.getInfoAsync(
-            manipulated.uri
-          );
-
-          if (info.exists && info.size <= 1024 * 1024) {
-            compressedImage = manipulated;
-            break;
-          }
-        }
-
-        if (compressedImage) break;
-      }
-
-      if (!compressedImage) {
-        Alert.alert(
-          'Image too large',
-          'Could not compress this image below 1 MB. Please choose another photo.'
-        );
-        return;
-      }
-
-      setSelectedImage(compressedImage);
-
-    } catch (error) {
-      console.error('Error selecting image:', error);
-
-      Alert.alert(
-        'Error',
-        'Could not select or compress the image.'
-      );
-    } finally {
-      setIsProcessingImage(false);
-    }
-  };
-
   // Open map
   const openMapPicker = () => {
     if (selectedCoordinate) {
@@ -301,7 +317,6 @@ export default function CreateEventScreen({ navigation }) {
       return;
     }
 
-    // Avoid searching again immediately after selecting a result
     if (selectedSearchQuery.current === query) {
       selectedSearchQuery.current = null;
       return;
@@ -407,32 +422,39 @@ export default function CreateEventScreen({ navigation }) {
     setSearchError('');
   };
 
-  // Create event
+  // Publish event
   const submit = async () => {
+    if (!ready || isSubmitting) return;
+
     try {
       setIsSubmitting(true);
 
-      // Garantir zona (e, se faltar, coordenadas para o mapa): quando o local
-      // foi escrito à mão ou marcado no mapa, pergunta-se ao Photon.
       let coordinate = selectedCoordinate;
       let area = selectedArea;
 
       if (!area || !coordinate) {
         try {
-          const found = await lookupLocation({ coordinate, query: place.trim() });
+          const found = await lookupLocation({
+            coordinate,
+            query: place.trim(),
+          });
 
           if (found) {
             area = area || found.area;
             coordinate = coordinate || found.coordinate;
           }
         } catch (lookupError) {
-          console.warn('Could not look up the event area:', lookupError.message);
+          console.warn(
+            'Could not look up the event area:',
+            lookupError.message
+          );
         }
       }
 
-      await createEvent({
+      const eventData = {
         title: title.trim(),
         category,
+        subcategory: subcategory || null,
         sport: category,
         level,
         description: description.trim(),
@@ -444,9 +466,16 @@ export default function CreateEventScreen({ navigation }) {
         lng: coordinate?.longitude ?? null,
         capacity: parseInt(capacity, 10) || 10,
         accessibility: access,
-        imageUri: selectedImage?.uri || null,
-      });
+        icon: selectedCategory.icon,
+      };
 
+      if (isEditing) {
+        await updateEvent(eventToEdit.id, eventData);
+      } else {
+        await createEvent(eventData);
+      }
+
+      setShowPreview(false);
       setDone(true);
     } catch (error) {
       console.error('Error creating event:', error);
@@ -482,19 +511,107 @@ export default function CreateEventScreen({ navigation }) {
         placeholder: 'Walk at the park',
       })}
 
+      {/* CATEGORY */}
       <Text style={styles.label}>Category</Text>
-      <View style={styles.wrap}>
-        {CATEGORIES.map((c) => (
-          <Chip
-            key={c}
-            label={c}
-            selected={category === c}
-            onPress={() => setCategory(c)}
+
+      <Pressable
+        style={styles.selectionInput}
+        onPress={() => setShowCategoryModal(true)}
+        disabled={isSubmitting}
+      >
+        <View style={styles.selectionValue}>
+          <MaterialCommunityIcons
+            name={selectedCategory.icon}
+            size={22}
+            color={colors.green}
           />
-        ))}
-      </View>
+          <Text style={styles.selectionText}>{category}</Text>
+        </View>
+
+        <MaterialCommunityIcons
+          name="chevron-down"
+          size={22}
+          color={colors.muted}
+        />
+      </Pressable>
+
+      {/* SUBCATEGORY */}
+      {selectedCategory.subcategories.length > 0 && (
+        <>
+          <Text style={styles.label}>Subcategory (optional)</Text>
+
+          <Pressable
+            style={styles.selectionInput}
+            onPress={() => setShowSubcategoryDropdown((current) => !current)}
+            disabled={isSubmitting}
+          >
+            <Text
+              style={[
+                styles.selectionText,
+                !subcategory && styles.placeholderText,
+              ]}
+            >
+              {subcategory || 'Select a subcategory'}
+            </Text>
+
+            <MaterialCommunityIcons
+              name={showSubcategoryDropdown ? 'chevron-up' : 'chevron-down'}
+              size={22}
+              color={colors.muted}
+            />
+          </Pressable>
+
+          {showSubcategoryDropdown && (
+            <View style={styles.dropdownOptions}>
+              {selectedCategory.subcategories.map((item) => (
+                <Pressable
+                  key={item}
+                  style={styles.dropdownOption}
+                  onPress={() => {
+                    setSubcategory(item);
+                    setShowSubcategoryDropdown(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.dropdownOptionText,
+                      subcategory === item &&
+                        styles.dropdownOptionTextSelected,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+
+                  {subcategory === item && (
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={19}
+                      color={colors.green}
+                    />
+                  )}
+                </Pressable>
+              ))}
+
+              {subcategory !== '' && (
+                <Pressable
+                  style={styles.dropdownOption}
+                  onPress={() => {
+                    setSubcategory('');
+                    setShowSubcategoryDropdown(false);
+                  }}
+                >
+                  <Text style={styles.clearOptionText}>
+                    Clear selection
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+        </>
+      )}
 
       <Text style={styles.label}>Level</Text>
+
       <View style={styles.wrap}>
         {LEVELS.map((l) => (
           <Chip
@@ -507,6 +624,7 @@ export default function CreateEventScreen({ navigation }) {
       </View>
 
       <Text style={styles.label}>Accessibility</Text>
+
       <View style={styles.wrap}>
         {ACCESSIBILITY.map((a) => (
           <Chip
@@ -523,7 +641,11 @@ export default function CreateEventScreen({ navigation }) {
         multiline: true,
         style: [
           styles.input,
-          { height: 90, textAlignVertical: 'top', borderRadius: 30 },
+          {
+            height: 90,
+            textAlignVertical: 'top',
+            borderRadius: 30,
+          },
         ],
       })}
 
@@ -605,6 +727,12 @@ export default function CreateEventScreen({ navigation }) {
           )}
         </View>
       </View>
+
+      {date && time.trim() && !isDateTimeValid && (
+        <Text style={styles.validationError}>
+          Please select a future date and time.
+        </Text>
+      )}
 
       {/* IPHONE DATE PICKER */}
       {Platform.OS === 'ios' && (
@@ -758,60 +886,121 @@ export default function CreateEventScreen({ navigation }) {
         </Text>
       )}
 
-      {/* EVENT PHOTO */}
-      <Text style={styles.label}>Event photo</Text>
-
-      <Pressable
-        style={styles.photoButton}
-        onPress={pickImage}
-        disabled={isProcessingImage || isSubmitting}
-      >
-        {selectedImage ? (
-          <Image
-            source={{ uri: selectedImage.uri }}
-            style={styles.photoPreview}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.photoPlaceholder}>
-            <Text style={styles.photoButtonText}>
-              {isProcessingImage ? 'Preparing photo...' : '+ Add event photo'}
-            </Text>
-            <Text style={styles.photoHint}>
-              JPEG · Maximum 1 MB
-            </Text>
-          </View>
-        )}
-      </Pressable>
-
-      {isProcessingImage && (
-        <Text style={styles.photoHint}>
-          Compressing photo...
-        </Text>
-      )}
-
-      {selectedImage && (
-        <Pressable
-          onPress={() => setSelectedImage(null)}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.removePhotoText}>
-            Remove photo
-          </Text>
-        </Pressable>
-      )}
-
       {field('Participant capacity', capacity, setCapacity, {
         keyboardType: 'number-pad',
         placeholder: '50',
       })}
 
       <Button
-        title="Create Event"
-        disabled={!ready || isSubmitting || isProcessingImage}
-        onPress={submit}
+        title={isEditing ? "Save Changes" : "Preview Event"}
+        disabled={!ready || isSubmitting}
+        onPress={() => setShowPreview(true)}
         style={{ marginTop: 24 }}
       />
+
+      {/* EVENT PREVIEW */}
+      <Modal
+        visible={showPreview}
+        animationType="slide"
+        onRequestClose={() => setShowPreview(false)}
+      >
+        <View style={styles.previewModalContainer}>
+          <View style={styles.previewHeader}>
+            <Pressable onPress={() => setShowPreview(false)}>
+              <MaterialCommunityIcons
+                name="arrow-left"
+                size={26}
+                color={colors.text}
+              />
+            </Pressable>
+
+            <Text style={styles.previewTitle}>Event Preview</Text>
+
+            <View style={{ width: 26 }} />
+          </View>
+
+          <ScrollView
+            style={styles.previewScroll}
+            contentContainerStyle={styles.previewScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.previewSubtitle}>
+              This is how your event will appear in the feed.
+            </Text>
+
+            <EventCard
+              event={{
+                id: 'preview',
+                title: title.trim(),
+                icon: selectedCategory.icon,
+                short: `${formatDate(date)}, ${time.trim()}`,
+                date: `${formatDate(date)}, ${time.trim()}`,
+                place: place.trim(),
+                area: selectedArea || '',
+                level,
+                accessibilityTag: access.length
+                  ? access.join(' · ')
+                  : null,
+              }}
+              right={
+                <View style={styles.previewBadge}>
+                  <Text style={styles.previewBadgeText}>Preview</Text>
+                </View>
+              }
+            />
+
+            <View style={styles.previewDetails}>
+              <Text style={styles.previewSectionTitle}>Event details</Text>
+
+              <Text style={styles.previewLabel}>Category</Text>
+              <Text style={styles.previewValue}>
+                {category}{subcategory ? ` · ${subcategory}` : ''}
+              </Text>
+
+              {description.trim() !== '' && (
+                <>
+                  <Text style={styles.previewLabel}>Description</Text>
+                  <Text style={styles.previewValue}>
+                    {description.trim()}
+                  </Text>
+                </>
+              )}
+
+              <Text style={styles.previewLabel}>Maximum participants</Text>
+              <Text style={styles.previewValue}>{capacity}</Text>
+
+              {access.length > 0 && (
+                <>
+                  <Text style={styles.previewLabel}>Accessibility</Text>
+                  <Text style={styles.previewValue}>
+                    {access.join(', ')}
+                  </Text>
+                </>
+              )}
+            </View>
+          </ScrollView>
+
+          <View style={styles.previewButtons}>
+            <Button
+              title="Edit"
+              variant="outline"
+              onPress={() => setShowPreview(false)}
+              style={{ flex: 1 }}
+            />
+
+            <Button
+              title={
+                isSubmitting 
+                ? (isEditing ? 'Saving...' : 'Publishing...')
+                : (isEditing ? 'Save Changes' : 'Publish Event')
+              }
+              disabled={isSubmitting}
+              onPress={submit}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* MAP PICKER */}
       {Platform.OS !== 'web' && (
@@ -933,10 +1122,83 @@ export default function CreateEventScreen({ navigation }) {
         </Modal>
       )}
 
+      {/* CATEGORY PICKER */}
+      <Modal
+        visible={showCategoryModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCategoryModal(false)}
+      >
+        <Pressable
+          style={styles.categoryModalOverlay}
+          onPress={() => setShowCategoryModal(false)}
+        >
+          <Pressable
+            style={styles.categoryModalContent}
+            onPress={() => {}}
+          >
+            <View style={styles.categoryModalHeader}>
+              <Text style={styles.categoryModalTitle}>
+                Choose a category
+              </Text>
+
+              <Pressable onPress={() => setShowCategoryModal(false)}>
+                <MaterialCommunityIcons
+                  name="close"
+                  size={24}
+                  color={colors.muted}
+                />
+              </Pressable>
+            </View>
+
+            <View style={styles.categoryGrid}>
+              {EVENT_CATEGORIES.map((item) => {
+                const selected = category === item.name;
+
+                return (
+                  <Pressable
+                    key={item.name}
+                    style={[
+                      styles.categoryOption,
+                      selected && styles.categoryOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setCategory(item.name);
+                      setSubcategory('');
+                      setShowSubcategoryDropdown(false);
+                      setShowCategoryModal(false);
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    <MaterialCommunityIcons
+                      name={item.icon}
+                      size={30}
+                      color={selected ? colors.green : colors.text}
+                    />
+
+                    <Text
+                      style={[
+                        styles.categoryOptionText,
+                        selected && styles.categoryOptionTextSelected,
+                      ]}
+                    >
+                      {item.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <ConfirmModal
         visible={done}
-        title="Event published!"
-        message="Your event is now listed under Hosting in My events."
+        title={isEditing ? 'Event updated!' : 'Event published!'}
+        message={
+          isEditing
+            ? 'Your event changes have been saved.'
+            : 'Your event is now listed under Hosting in My events.'
+        }
         onConfirm={() => {
           setDone(false);
           navigation.goBack();
@@ -1106,38 +1368,199 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
   },
-  photoButton: {
+  selectionInput: {
+    minHeight: 52,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  selectionValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  selectionText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  placeholderText: {
+    color: colors.muted,
+    fontWeight: '400',
+  },
+  dropdownOptions: {
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginTop: 4,
-  },
-  photoPlaceholder: {
-    height: 150,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoPreview: {
-    width: '100%',
-    height: 190,
-  },
-  photoButtonText: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  photoHint: {
-    color: colors.muted,
-    fontSize: 12,
+    borderRadius: 12,
     marginTop: 6,
+    overflow: 'hidden',
   },
-  removePhotoText: {
-    color: '#D9534F',
+  dropdownOption: {
+    minHeight: 46,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  dropdownOptionText: {
+    color: colors.text,
+    fontSize: 14,
+  },
+  dropdownOptionTextSelected: {
+    color: colors.green,
+    fontWeight: '700',
+  },
+  clearOptionText: {
+    color: colors.muted,
+    fontSize: 13,
+  },
+  categoryModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  categoryModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 32,
+  },
+  categoryModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  categoryModalTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  categoryOption: {
+    width: '31.5%',
+    minHeight: 94,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7F8F7',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  categoryOptionSelected: {
+    backgroundColor: '#EAF5EF',
+    borderColor: colors.green,
+  },
+  categoryOptionText: {
+    color: colors.text,
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 7,
+  },
+  categoryOptionTextSelected: {
+    color: colors.green,
+  },
+  validationError: {
+    color: colors.orange,
+    fontSize: 13,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+
+  // EVENT PREVIEW
+  previewModalContainer: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  previewScroll: {
+    flex: 1,
+  },
+  previewScrollContent: {
+    padding: 16,
+    paddingBottom: 24,
+  },
+  previewSubtitle: {
+    color: colors.muted,
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  previewBadge: {
+    backgroundColor: '#EAF5EF',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: radii.pill,
+  },
+  previewBadgeText: {
+    color: colors.green,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  previewDetails: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  previewSectionTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  previewLabel: {
+    color: colors.muted,
     fontSize: 13,
     fontWeight: '600',
-    textAlign: 'right',
-    marginTop: 8,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  previewValue: {
+    color: colors.text,
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  previewButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.bg,
   },
 });

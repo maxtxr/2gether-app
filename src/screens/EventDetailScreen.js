@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import {
   View,
@@ -36,11 +35,29 @@ export default function EventDetailScreen({ route, navigation }) {
     joinEvent,
     leaveEvent,
     getOrCreateConversation,
+    deleteEvent,
   } = useApp();
 
   const event = events.find((e) => e.id === route.params.id);
 
-  // Janela de resultado: { title, message, variant }
+  // Estado do evento, atualizado automaticamente
+  const [eventEnded, setEventEnded] = useState(() =>
+    eventHasEnded(event)
+  );
+
+  useEffect(() => {
+    const updateEventStatus = () => {
+      setEventEnded(eventHasEnded(event));
+    };
+
+    updateEventStatus();
+
+    const interval = setInterval(updateEventStatus, 1000);
+
+    return () => clearInterval(interval);
+  }, [event?.id, event?.when, event?.past]);
+
+  // Janelas de confirmação e resultado
   const [modal, setModal] = useState(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -52,6 +69,10 @@ export default function EventDetailScreen({ route, navigation }) {
   // Nomes dos participantes, para mostrar as iniciais
   const participantIds = (event && participants[event.id]) || [];
   const participantKey = participantIds.join(',');
+
+  // Apagar eventos
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!participantKey) return;
@@ -123,8 +144,6 @@ export default function EventDetailScreen({ route, navigation }) {
   const left = spotsLeft(event);
   const full = left <= 0 && !going;
 
-  const eventEnded = eventHasEnded(event);
-
   const showError = (error, fallback) =>
     setModal({
       title: 'Something went wrong',
@@ -132,13 +151,12 @@ export default function EventDetailScreen({ route, navigation }) {
       variant: 'danger',
     });
 
-  // Entrar no evento (espera pela resposta do servidor)
+  // Entrar no evento
   const join = async () => {
     try {
       setIsJoining(true);
       await joinEvent(event.id);
 
-      // Remover da lista de espera depois de entrar
       const { error } = await supabase
         .from('event_waitlist')
         .delete()
@@ -162,7 +180,7 @@ export default function EventDetailScreen({ route, navigation }) {
     }
   };
 
-  // Cancelar a participação, depois de o utilizador confirmar
+  // Cancelar a participação
   const leave = async () => {
     setConfirmLeave(false);
 
@@ -187,13 +205,16 @@ export default function EventDetailScreen({ route, navigation }) {
     (review) => review.userId === user?.id
   );
 
-  // Até 4 avatares: "ME" primeiro (se for o caso), depois os outros pelas iniciais
+  // Até 4 avatares
   const MAX_AVATARS = 4;
   const others = participantIds
     .filter((id) => id !== user?.id)
     .map((id) => participantNames[id] || '?');
-  const shown = [...(going ? ['ME'] : []), ...others.map((name) => initials(name) || '?')]
-    .slice(0, MAX_AVATARS);
+
+  const shown = [
+    ...(going ? ['ME'] : []),
+    ...others.map((name) => initials(name) || '?'),
+  ].slice(0, MAX_AVATARS);
 
   // Entrar ou sair da lista de espera
   const toggleWaitlist = async () => {
@@ -240,6 +261,22 @@ export default function EventDetailScreen({ route, navigation }) {
       showError(error, 'Could not update the waitlist.');
     } finally {
       setIsUpdatingWaitlist(false);
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+    try {
+      setIsDeleting(true);
+
+      await deleteEvent(event.id);
+
+      setConfirmDelete(false);
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      Alert.alert('Error', 'Could not delete this event. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -317,6 +354,7 @@ export default function EventDetailScreen({ route, navigation }) {
             ? `${count} ${count === 1 ? 'person' : 'people'} went`
             : `${count} ${count === 1 ? 'participant' : 'participants'}`}
         </Text>
+
         {!eventEnded && (
           <Text style={styles.partSub}>
             {left > 0 ? `${left} ${left === 1 ? 'spot' : 'spots'} left` : 'Full'} · {event.capacity} max
@@ -346,20 +384,24 @@ export default function EventDetailScreen({ route, navigation }) {
             />
           ) : full ? (
             <View style={{ marginTop: 20 }}>
-              <Text style={{
-                color: colors.text,
-                fontWeight: '700',
-                fontSize: 16,
-                marginBottom: 6,
-              }}>
+              <Text
+                style={{
+                  color: colors.text,
+                  fontWeight: '700',
+                  fontSize: 16,
+                  marginBottom: 6,
+                }}
+              >
                 Event is full!
               </Text>
 
-              <Text style={{
-                color: colors.muted,
-                fontSize: 14,
-                marginBottom: 12,
-              }}>
+              <Text
+                style={{
+                  color: colors.muted,
+                  fontSize: 14,
+                  marginBottom: 12,
+                }}
+              >
                 Want to receive a notification if a spot becomes available?
               </Text>
 
@@ -406,33 +448,62 @@ export default function EventDetailScreen({ route, navigation }) {
         </View>
       )}
 
-      {event.host_id && user && (
-        <Button
-          title={event.host_id === user.id ? 'View chats' : 'Message organizer'}
-          variant="outline"
-          icon="chatbubble-outline"
-          onPress={async () => {
-            try {
-              if (event.host_id === user.id) {
-                navigation.navigate('EventChats', {
-                  eventId: event.id,
-                });
-              } else {
-                const conversation = await getOrCreateConversation(event.id);
+      <View style={styles.eventActions}>
+        {event.host_id && user && (
+          <View style={styles.eventAction}>
+            <Button
+              title={hosting ? 'Chats' : 'Message'}
+              variant="outline"
+              icon="chatbubble-outline"
+              onPress={async () => {
+                try {
+                  if (hosting) {
+                    navigation.navigate('EventChats', {
+                      eventId: event.id,
+                    });
+                  } else {
+                    const conversation = await getOrCreateConversation(event.id);
 
-                navigation.navigate('Chat', {
-                  conversationId: conversation.id,
-                  eventId: event.id,
-                  otherName: event.host,
-                });
-              }
-            } catch (error) {
-              Alert.alert('Chat error', error.message);
-            }
-          }}
-          style={{ marginTop: 10 }}
-        />
-      )}
+                    navigation.navigate('Chat', {
+                      conversationId: conversation.id,
+                      eventId: event.id,
+                      otherName: event.host,
+                    });
+                  }
+                } catch (error) {
+                  Alert.alert('Chat error', error.message);
+                }
+              }}
+            />
+          </View>
+        )}
+
+        {/* Editar e eliminar apenas antes do início do evento */}
+        {hosting && !eventEnded && (
+          <>
+            <View style={styles.eventAction}>
+              <Button
+                title="Edit"
+                variant="outline"
+                icon="create-outline"
+                onPress={() =>
+                  navigation.navigate('CreateEvent', { event })
+                }
+              />
+            </View>
+
+            <View style={styles.eventAction}>
+              <Button
+                title="Delete"
+                variant="outline"
+                icon="trash-outline"
+                onPress={() => setConfirmDelete(true)}
+                style={styles.deleteButton}
+              />
+            </View>
+          </>
+        )}
+      </View>
 
       {/* EXISTING REVIEWS */}
       {eventReviews.length > 0 && (
@@ -463,7 +534,11 @@ export default function EventDetailScreen({ route, navigation }) {
               {review.accessibilityAccuracy && (
                 <Text style={styles.reviewAccuracy}>
                   Accessibility info:{' '}
-                  {{ yes: 'accurate', partly: 'partly accurate', no: 'not accurate' }[review.accessibilityAccuracy]}
+                  {{
+                    yes: 'accurate',
+                    partly: 'partly accurate',
+                    no: 'not accurate',
+                  }[review.accessibilityAccuracy]}
                 </Text>
               )}
 
@@ -496,6 +571,17 @@ export default function EventDetailScreen({ route, navigation }) {
         message={modal?.message}
         variant={modal?.variant}
         onConfirm={() => setModal(null)}
+      />
+
+      <ConfirmModal
+        visible={confirmDelete}
+        variant="danger"
+        title="Delete event?"
+        message="Are you sure you want to delete this event? All participants will be notified and the event will be permanently removed."
+        confirmText={isDeleting ? 'Deleting...' : 'Yes, delete'}
+        cancelText="Keep event"
+        onConfirm={handleDeleteEvent}
+        onCancel={() => setConfirmDelete(false)}
       />
     </ScrollView>
   );
@@ -798,10 +884,28 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontStyle: 'italic',
   },
+
   reviewImage: {
     width: '100%',
     height: 190,
     borderRadius: 10,
     marginTop: 12,
+  },
+
+  eventActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+    alignItems: 'center',
+  },
+
+  eventAction: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  deleteButton: {
+    backgroundColor: colors.orange,
+    borderColor: colors.orange,
   },
 });
