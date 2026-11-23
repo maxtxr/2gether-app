@@ -9,6 +9,7 @@ import {
   ProfileHeader,
   StatsRow,
   PendingReviewBanner,
+  ReviewsCompletedBanner,
   EventsCardList,
   BadgesGrid,
   ReviewsList,
@@ -26,7 +27,7 @@ export default function ProfileScreen({ navigation }) {
     averageRating,
   } = useApp();
 
-  const [activeEventTab, setActiveEventTab] = useState('upcoming'); // 'upcoming' | 'hosted' | 'past'
+  const [activeEventTab, setActiveEventTab] = useState('upcoming');
 
   const safeInterests = Array.isArray(user?.interests) ? user.interests : [];
   const safeAccessibility = Array.isArray(user?.accessibility) ? user.accessibility : [];
@@ -53,31 +54,31 @@ export default function ProfileScreen({ navigation }) {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. Header (Static Avatar + Edit Button + Settings Cog) */}
       <ProfileHeader
         user={user}
         onEditPress={() => navigation.navigate('EditProfile')}
         onSettingsPress={() => navigation.navigate('Settings')}
       />
 
-      {/* 2. Key Stats Counter */}
       <StatsRow
         joinedCount={joinedCount || safeUpcoming.length + safePast.length}
         hostedCount={safeHosted.length}
         rating={averageRating}
       />
 
-      {/* 3. Event Needing Review (If any past event isn't reviewed yet) */}
-      {eventNeedingReview && (
+      {eventNeedingReview ? (
         <PendingReviewBanner
           event={eventNeedingReview}
           onReview={(event) =>
-            navigation.navigate('LeaveReview', { eventId: event.id, title: event.title })
+            navigation.navigate('Review', {
+              id: event.id,
+            })
           }
         />
-      )}
+      ) : safePast.length > 0 ? (
+        <ReviewsCompletedBanner />
+      ) : null}
 
-      {/* 4. Interests & Sports */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Sports & Interests</Text>
@@ -92,7 +93,6 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </View>
 
-      {/* 5. Accessibility Preferences */}
       {safeAccessibility.length > 0 && (
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -107,7 +107,6 @@ export default function ProfileScreen({ navigation }) {
         </View>
       )}
 
-      {/* 6. Events Hub (Upcoming / Hosted / Past Tab switcher) */}
       <View style={styles.card}>
         <View style={styles.tabBar}>
           <Pressable
@@ -160,7 +159,6 @@ export default function ProfileScreen({ navigation }) {
         />
       </View>
 
-      {/* 7. Badges */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Badges</Text>
@@ -171,7 +169,6 @@ export default function ProfileScreen({ navigation }) {
         <BadgesGrid badges={safeBadges} />
       </View>
 
-      {/* 8. Host Reviews */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Host Reviews</Text>
@@ -186,7 +183,7 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg || '#F8FAF9',
+    backgroundColor: colors.bg || '#F8F9FA',
   },
   content: {
     padding: 16,

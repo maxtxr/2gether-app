@@ -125,6 +125,23 @@ export function PendingReviewBanner({ event, onReview }) {
   );
 }
 
+export function ReviewsCompletedBanner() {
+  return (
+    <View style={styles.reviewsCompletedBanner}>
+      <View style={styles.completedIcon}>
+        <Ionicons name="checkmark-done" size={18} color="#16A34A" />
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <Text style={styles.completedTitle}>All reviews up to date!</Text>
+        <Text style={styles.completedSubtitle}>
+          You've reviewed all your past events. Thanks for sharing your feedback!
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export function EventsCardList({ events = [], type = 'upcoming', onSelect }) {
   if (events.length === 0) {
     const emptyMessages = {
@@ -493,5 +510,34 @@ const styles = StyleSheet.create({
   },
   btnPressed: {
     opacity: 0.65,
+  },
+  reviewsCompletedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: radii.md || 16,
+    padding: 14,
+    marginBottom: 12,
+  },
+  completedIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  completedTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  completedSubtitle: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 2,
   },
 });

@@ -368,7 +368,7 @@ export function AppProvider({ children }) {
 
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, name')
+        .select('id, name, avatar_path')
         .in('id', userIds);
 
       if (profilesError) throw profilesError;
@@ -401,6 +401,7 @@ export function AppProvider({ children }) {
           accessibilityAccuracy: review.accessibility_accuracy,
           imageUrl,
           author: profile?.name || 'Unknown',
+          authorAvatar : avatarPublicUrl(profile?.avatar_path),
           eventTitle: event?.title || 'Event',
           createdAt: review.created_at,
         };
@@ -1084,6 +1085,7 @@ export function AppProvider({ children }) {
             .getPublicUrl(imagePath).data.publicUrl
         : null,
       author: user.name,
+      authorAvatar: user.avatarUrl,
       eventTitle: event?.title || 'Event',
       createdAt: data.created_at,
     };
@@ -1325,9 +1327,16 @@ export function AppProvider({ children }) {
 
   // ---------------- DERIVED DATA ----------------
 
-  const pastEvents = events.filter(
-    (event) => goingIds.includes(event.id) && eventHasEnded(event)
-  );
+  const pastEvents = events
+    .filter(
+      (event) => goingIds.includes(event.id) && eventHasEnded(event)
+    )
+    .map((event) => ({
+      ...event,
+      reviewed: (reviews[event.id] || []).some(
+        (review) => review.userId === user?.id
+      ),
+    }));
 
   const unreadCount = notifications.filter(
     (notification) => !notification.read
