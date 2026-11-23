@@ -164,7 +164,7 @@ src/
   data/options.js          # categories, subcategories, icons, levels, accessibility options
   theme/index.js           # colors, spacing, radii, level colors
   components/
-    common/                # Avatar, Button, Chip, ConfirmModal, Logo, Stars
+    common/                # Avatar, Button, Chip, ConfirmModal, Logo, ReviewCard, Stars
     events/                # EventCard, AccessibilityBadge, EventMap (+ .web fallback)
     profile/               # EditProfileModal, ProfileComponents
   utils/validation.js      # email and password validation

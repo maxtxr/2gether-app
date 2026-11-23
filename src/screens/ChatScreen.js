@@ -7,10 +7,13 @@ import {
   FlatList,
   Pressable,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   StyleSheet,
   Alert,
 } from 'react-native';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
@@ -27,8 +30,36 @@ export default function ChatScreen({ route, navigation }) {
 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
 
   const listRef = useRef(null);
+
+  // Keep the message input above the keyboard on both platforms. Android uses
+  // edge-to-edge, so adjustResize alone does not move the screen content.
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const show = Keyboard.addListener(showEvent, () => {
+      setKeyboardVisible(true);
+      requestAnimationFrame(() =>
+        listRef.current?.scrollToEnd({ animated: true })
+      );
+    });
+    const hide = Keyboard.addListener(hideEvent, () =>
+      setKeyboardVisible(false)
+    );
+
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   // Conversa privada entre um participante e o organizador
   useEffect(() => {
@@ -104,8 +135,8 @@ export default function ChatScreen({ route, navigation }) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
+      behavior="padding"
+      keyboardVerticalOffset={headerHeight}
     >
       <View style={styles.header}>
         <Avatar name={otherName || event.host} size={40} />
@@ -122,6 +153,8 @@ export default function ChatScreen({ route, navigation }) {
         data={messages}
         keyExtractor={(m) => m.id}
         contentContainerStyle={{ padding: 16 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         onContentSizeChange={() =>
           listRef.current?.scrollToEnd({ animated: true })
         }
@@ -161,7 +194,16 @@ export default function ChatScreen({ route, navigation }) {
         }}
       />
 
-      <View style={styles.inputRow}>
+      <View
+        style={[
+          styles.inputRow,
+          {
+            paddingBottom: keyboardVisible
+              ? 10
+              : Math.max(10, insets.bottom),
+          },
+        ]}
+      >
         <TextInput
           style={styles.input}
           value={text}
@@ -170,6 +212,8 @@ export default function ChatScreen({ route, navigation }) {
           placeholderTextColor={colors.muted}
           onSubmitEditing={send}
           editable={!sending}
+          returnKeyType="send"
+          blurOnSubmit={false}
         />
 
         <Pressable

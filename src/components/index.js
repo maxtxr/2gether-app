@@ -4,5 +4,6 @@ export { default as Chip } from './common/Chip';
 export { default as ConfirmModal } from './common/ConfirmModal';
 export { default as Logo } from './common/Logo';
 export { default as Stars } from './common/Stars';
+export { default as ReviewCard } from './common/ReviewCard';
 export { default as EventCard } from './events/EventCard';
 export { default as AccessibilityBadge } from './events/AccessibilityBadge';

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../../theme';
-import { Avatar, Stars } from '../../components';
+import { Avatar, ReviewCard } from '../../components';
 
 export function ProfileHeader({
   user,
@@ -223,7 +223,7 @@ export function BadgesGrid({ badges = [] }) {
   );
 }
 
-export function ReviewsList({ reviews = [] }) {
+export function ReviewsList({ reviews = [], onOpenEvent }) {
   if (reviews.length === 0) {
     return (
       <Text style={styles.emptyHint}>
@@ -231,16 +231,21 @@ export function ReviewsList({ reviews = [] }) {
       </Text>
     );
   }
-  return reviews.map((r) => (
-    <View key={r.id} style={styles.reviewBubble}>
-      <View style={styles.reviewHeader}>
-        <Text style={styles.reviewAuthor}>{r.author || 'Guest'}</Text>
-        <Stars rating={r.rating} size={12} />
-      </View>
-      {!!r.eventTitle && <Text style={styles.reviewTitle}>{r.eventTitle}</Text>}
-      {!!r.content && <Text style={styles.reviewText}>{r.content}</Text>}
+  return (
+    <View style={styles.reviewsList}>
+      {reviews.map((r) => (
+        <ReviewCard
+          key={r.id}
+          review={r}
+          onEventPress={
+            onOpenEvent && r.eventId
+              ? () => onOpenEvent(r.eventId)
+              : undefined
+          }
+        />
+      ))}
     </View>
-  ));
+  );
 }
 
 const styles = StyleSheet.create({
@@ -474,34 +479,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 2,
   },
-  reviewBubble: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border || '#E5E7EB',
-    padding: 10,
-    marginTop: 8,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  reviewAuthor: {
-    fontWeight: '700',
-    fontSize: 13,
-    color: colors.text,
-  },
-  reviewTitle: {
-    color: colors.muted,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  reviewText: {
-    color: colors.text,
-    fontSize: 13,
-    marginTop: 4,
-    lineHeight: 18,
+  reviewsList: {
+    gap: 12,
   },
   emptyHint: {
     color: colors.muted,

@@ -169,12 +169,15 @@ export default function ProfileScreen({ navigation }) {
         <BadgesGrid badges={safeBadges} />
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.reviewsBlock}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Host Reviews</Text>
           <Text style={styles.badgeText}>{safeReviews.length}</Text>
         </View>
-        <ReviewsList reviews={safeReviews} />
+        <ReviewsList
+          reviews={safeReviews}
+          onOpenEvent={(id) => navigation.navigate('EventDetail', { id })}
+        />
       </View>
     </ScrollView>
   );
@@ -246,5 +249,8 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     marginTop: 4,
+  },
+  reviewsBlock: {
+    marginBottom: 12,
   },
 });

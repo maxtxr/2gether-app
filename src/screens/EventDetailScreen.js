@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  Image,
 } from 'react-native';
 
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,6 +17,7 @@ import {
   initials,
   Button,
   ConfirmModal,
+  ReviewCard,
 } from '../components';
 
 import { EVENT_CATEGORIES, ACCESSIBILITY } from '../data/options';
@@ -614,46 +614,11 @@ export default function EventDetailScreen({ route, navigation }) {
           </View>
 
           {eventReviews.map((review) => (
-            <View key={review.id} style={styles.reviewCard}>
-              <View style={styles.reviewAuthorRow}>
-                <Avatar label={initials(review.author)} />
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.reviewAuthor}>{review.author}</Text>
-                  <View style={styles.reviewStars}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Ionicons
-                        key={star}
-                        name={star <= review.rating ? 'star' : 'star-outline'}
-                        size={14}
-                        color={colors.orange}
-                      />
-                    ))}
-                  </View>
-                </View>
-              </View>
-
-              <Text style={styles.reviewContent}>{review.content}</Text>
-
-              {review.accessibilityAccuracy && (
-                <Text style={styles.reviewAccuracy}>
-                  Accessibility info:{' '}
-                  {{
-                    yes: 'accurate',
-                    partly: 'partly accurate',
-                    no: 'not accurate',
-                  }[review.accessibilityAccuracy]}
-                </Text>
-              )}
-
-              {review.imageUrl && (
-                <Image
-                  source={{ uri: review.imageUrl }}
-                  style={styles.reviewImage}
-                  resizeMode="cover"
-                />
-              )}
-            </View>
+            <ReviewCard
+              key={review.id}
+              review={review}
+              showEvent={false}
+            />
           ))}
         </View>
       )}
@@ -1075,51 +1040,6 @@ const styles = StyleSheet.create({
     color: colors.green,
     fontSize: 12,
     fontWeight: '700',
-  },
-
-  reviewCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-  },
-
-  reviewAuthorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-
-  reviewAuthor: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-
-  reviewStars: {
-    flexDirection: 'row',
-    marginTop: 4,
-    gap: 2,
-  },
-
-  reviewContent: {
-    color: colors.text,
-    lineHeight: 21,
-    fontSize: 13,
-    marginTop: 12,
-  },
-
-  reviewAccuracy: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 7,
-    fontStyle: 'italic',
-  },
-
-  reviewImage: {
-    width: '100%',
-    height: 190,
-    borderRadius: 10,
-    marginTop: 12,
   },
 
   compactInfoRow: {

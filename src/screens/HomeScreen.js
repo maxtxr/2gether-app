@@ -4,13 +4,12 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Image,
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
 import { useApp, eventHasEnded } from '../context/AppContext';
-import { EventCard, Avatar, Stars } from '../components';
+import { EventCard, Avatar, ReviewCard } from '../components';
 
 export default function HomeScreen({ navigation }) {
   const { user, events = [], reviews = {} } = useApp();
@@ -48,18 +47,6 @@ export default function HomeScreen({ navigation }) {
 
   const openEvent = (id) => {
     if (id) navigation.navigate('EventDetail', { id });
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    try {
-      return new Date(dateString).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-      });
-    } catch {
-      return '';
-    }
   };
 
   return (
@@ -139,76 +126,15 @@ export default function HomeScreen({ navigation }) {
         <>
           <View style={styles.reviewsList}>
             {feedReviews.map((review) => (
-              <View key={review.id} style={styles.reviewCard}>
-                {/* Reviewer Header */}
-                <View style={styles.reviewHeader}>
-                  <Avatar
-                    source={review.authorAvatar}
-                    name={review.author || 'Member'}
-                    size={40}
-                  />
-
-                  <View style={styles.authorMeta}>
-                    <Text style={styles.authorName} numberOfLines={1}>
-                      {review.author || 'Anonymous'}
-                    </Text>
-                    {review.eventTitle && (
-                      <Pressable
-                        onPress={() => openEvent(review.eventId)}
-                        hitSlop={4}
-                      >
-                        <Text style={styles.eventLink} numberOfLines={1}>
-                          attended <Text style={styles.eventLinkHighlight}>{review.eventTitle}</Text>
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
-
-                  {/* Natural Rating Stars (Component or inline stars) */}
-                  <View style={styles.ratingWrap}>
-                    <Stars rating={review.rating || 5} size={13} />
-                  </View>
-                </View>
-
-                {/* Review Content */}
-                {!!review.content && (
-                  <Text style={styles.reviewContent}>{review.content}</Text>
-                )}
-
-                {/* Optional Attached Picture */}
-                {review.imageUrl && (
-                  <Image
-                    source={{ uri: review.imageUrl }}
-                    style={styles.reviewImage}
-                    resizeMode="cover"
-                  />
-                )}
-
-                {/* Footer Meta */}
-                <View style={styles.reviewFooter}>
-                  <Text style={styles.reviewDate}>
-                    {formatDate(review.createdAt)}
-                  </Text>
-
-                  {review.eventId && (
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.viewEventBtn,
-                        pressed && { opacity: 0.7 },
-                      ]}
-                      onPress={() => openEvent(review.eventId)}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.viewEventText}>View event</Text>
-                      <Ionicons
-                        name="arrow-forward"
-                        size={12}
-                        color={colors.green || '#16A34A'}
-                      />
-                    </Pressable>
-                  )}
-                </View>
-              </View>
+              <ReviewCard
+                key={review.id}
+                review={review}
+                onEventPress={
+                  review.eventId
+                    ? () => openEvent(review.eventId)
+                    : undefined
+                }
+              />
             ))}
           </View>
 
@@ -349,75 +275,6 @@ const styles = StyleSheet.create({
   reviewsList: {
     marginHorizontal: 16,
     gap: 12,
-  },
-  reviewCard: {
-    backgroundColor: '#fff',
-    borderRadius: radii.md || 16,
-    borderWidth: 1,
-    borderColor: colors.border || '#E5E7EB',
-    padding: 16,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  authorMeta: {
-    flex: 1,
-    marginLeft: 10,
-    justifyContent: 'center',
-  },
-  authorName: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  eventLink: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 1,
-  },
-  eventLinkHighlight: {
-    color: colors.text,
-    fontWeight: '600',
-  },
-  ratingWrap: {
-    alignItems: 'flex-end',
-  },
-  reviewContent: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 10,
-  },
-  reviewImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: radii.sm || 10,
-    marginBottom: 10,
-    backgroundColor: '#F3F4F6',
-  },
-  reviewFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border || '#F3F4F6',
-  },
-  reviewDate: {
-    color: colors.muted,
-    fontSize: 12,
-  },
-  viewEventBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  viewEventText: {
-    color: colors.green || '#16A34A',
-    fontSize: 12,
-    fontWeight: '700',
   },
   loadMoreContainer: {
     marginTop: 18,
