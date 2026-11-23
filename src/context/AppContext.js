@@ -564,6 +564,55 @@ export function AppProvider({ children }) {
     setUser(null);
   };
 
+  // Apagar conta de verdade (Storage API + RPC → auth.users + dados)
+  const deleteAccount = async () => {
+    if (!user) {
+      throw new Error('You must be logged in.');
+    }
+
+    // Storage não pode ser limpo via SQL — tem de ser pela API
+    const removeFolder = async (bucket, folder) => {
+      const { data: listed, error: listError } = await supabase.storage
+        .from(bucket)
+        .list(folder);
+
+      if (listError || !listed?.length) return;
+
+      const paths = listed.map((f) => `${folder}/${f.name}`);
+      await supabase.storage.from(bucket).remove(paths);
+    };
+
+    await removeFolder('avatars', user.id);
+    await removeFolder('review-images', user.id);
+
+    const hosted = (events || []).filter((e) => e.host_id === user.id);
+    const eventImagePaths = hosted
+      .map((e) => e.image_path)
+      .filter(Boolean);
+    if (eventImagePaths.length) {
+      await supabase.storage.from('event-images').remove(eventImagePaths);
+    }
+
+    const { error } = await supabase.rpc('delete_own_account');
+
+    if (error) throw error;
+
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      // Sessão já inválida depois do delete — ok
+    }
+
+    setUser(null);
+    setEvents([]);
+    setParticipants({});
+    setGoingIds([]);
+    setHostedIds([]);
+    setReviews({});
+    setNotifications([]);
+    setChats({});
+  };
+
   // Atualizar perfil
   const updateProfile = async (patch) => {
     if (!user) return;
@@ -1500,6 +1549,7 @@ export function AppProvider({ children }) {
     login,
     signUp,
     logout,
+    deleteAccount,
     updateProfile,
     uploadAvatar,
 

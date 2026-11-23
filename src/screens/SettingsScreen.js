@@ -1,4 +1,13 @@
-import { View, Text, Pressable, ScrollView, StyleSheet, Alert } from 'react-native';
+import { useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
@@ -12,15 +21,32 @@ const PREFERENCES = [
 ];
 
 export default function SettingsScreen() {
-  const { logout } = useApp();
+  const { logout, deleteAccount } = useApp();
+  const [deleting, setDeleting] = useState(false);
 
-  const deleteAccount = () =>
+  const confirmDeleteAccount = () =>
     Alert.alert(
       'Delete account',
       'This will permanently delete your account and profile data. Are you sure?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: logout },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (deleting) return;
+            setDeleting(true);
+            try {
+              await deleteAccount();
+            } catch (error) {
+              Alert.alert(
+                'Could not delete account',
+                error?.message || 'Something went wrong.'
+              );
+              setDeleting(false);
+            }
+          },
+        },
       ]
     );
 
@@ -62,21 +88,47 @@ export default function SettingsScreen() {
       <Text style={styles.sectionTitle}>ACCOUNT</Text>
       <View style={styles.card}>
         <Pressable
-          style={({ pressed }) => [styles.row, styles.rowDivider, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.row,
+            styles.rowDivider,
+            pressed && styles.pressed,
+          ]}
           onPress={logout}
+          disabled={deleting}
           accessibilityRole="button"
         >
-          <Ionicons name="log-out-outline" size={18} color={colors.text} style={styles.rowIcon} />
+          <Ionicons
+            name="log-out-outline"
+            size={18}
+            color={colors.text}
+            style={styles.rowIcon}
+          />
           <Text style={styles.label}>Log out</Text>
         </Pressable>
 
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-          onPress={deleteAccount}
+          onPress={confirmDeleteAccount}
+          disabled={deleting}
           accessibilityRole="button"
         >
-          <Ionicons name="trash-outline" size={18} color={colors.danger} style={styles.rowIcon} />
-          <Text style={[styles.label, { color: colors.danger }]}>Delete account</Text>
+          {deleting ? (
+            <ActivityIndicator
+              size="small"
+              color={colors.danger}
+              style={styles.rowIcon}
+            />
+          ) : (
+            <Ionicons
+              name="trash-outline"
+              size={18}
+              color={colors.danger}
+              style={styles.rowIcon}
+            />
+          )}
+          <Text style={[styles.label, { color: colors.danger }]}>
+            {deleting ? 'Deleting…' : 'Delete account'}
+          </Text>
         </Pressable>
       </View>
     </ScrollView>
