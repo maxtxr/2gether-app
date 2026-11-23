@@ -10,7 +10,7 @@ import {
   AppState,
 } from 'react-native';
 
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import Slider from '@react-native-community/slider';
 
@@ -40,16 +40,6 @@ const getDistance = (lat1, lng1, lat2, lng2) => {
 const getEventDate = (event) => {
   const timestamp = new Date(event.when).getTime();
   return Number.isNaN(timestamp) ? Infinity : timestamp;
-};
-
-const categoryIcons = {
-  Fitness: 'barbell-outline',
-  Outdoors: 'leaf-outline',
-  'Team Sports': 'basketball-outline',
-  'Water Sports': 'water-outline',
-  Wellness: 'flower-outline',
-  Social: 'people-outline',
-  Other: 'ellipsis-horizontal-circle-outline',
 };
 
 export default function ExploreScreen({ navigation }) {
@@ -494,7 +484,7 @@ export default function ExploreScreen({ navigation }) {
                   ]}
                 >
                   <Ionicons
-                    name={categoryIcons[item.name] || 'apps-outline'}
+                    name={item.icon || 'apps-outline'}
                     size={18}
                     color={selected ? '#fff' : colors.text}
                   />
@@ -678,12 +668,13 @@ export default function ExploreScreen({ navigation }) {
           <Text style={styles.panelLabel}>Accessibility</Text>
 
           <View style={styles.chips}>
-            {ACCESSIBILITY.map((a) => (
+            {ACCESSIBILITY.map((item) => (
               <Chip
-                key={a}
-                label={a}
-                selected={access === a}
-                onPress={() => setAccess(toggle(access, a))}
+                key={item.name}
+                label={item.name}
+                icon={item.icon}
+                selected={access === item.name}
+                onPress={() => setAccess(toggle(access, item.name))}
               />
             ))}
           </View>
@@ -750,8 +741,8 @@ export default function ExploreScreen({ navigation }) {
             style={styles.sortButton}
             onPress={() => setShowSortOptions(!showSortOptions)}
           >
-            <Ionicons
-              name={selectedSort?.icon || 'funnel-outline'}
+            <MaterialCommunityIcons
+              name={selectedSort?.icon || 'filter-outline'}
               size={16}
               color={colors.text}
             />
@@ -789,7 +780,7 @@ export default function ExploreScreen({ navigation }) {
                       setShowSortOptions(false);
                     }}
                   >
-                    <Ionicons
+                    <MaterialCommunityIcons
                       name={option.icon}
                       size={17}
                       color={

@@ -4,11 +4,16 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme';
 import { useApp, eventHasEnded } from '../../context/AppContext';
 import ConfirmModal from '../common/ConfirmModal';
+import { EVENT_CATEGORIES } from '../../data/options';
 
 export default function EventCard({ event, onPress, right }) {
   const { goingIds = [], hostedIds = [], joinEvent } = useApp();
   const going = goingIds.includes(event.id);
   const hosting = hostedIds.includes(event.id);
+
+  const categoryIcon = EVENT_CATEGORIES.find(
+    (category) => category.name === event.category
+  )?.icon;
 
   // Inscrição rápida pelo "+": pergunta primeiro, depois mostra o resultado
   const [confirmJoin, setConfirmJoin] = useState(false);
@@ -41,47 +46,46 @@ export default function EventCard({ event, onPress, right }) {
         accessibilityLabel={`View details for ${event.title}`}
         style={({ pressed }) => [styles.main, pressed && styles.cardPressed]}
       >
-      {/* Sport Category Icon Container */}
-      <View style={styles.categoryIconBox}>
-        <MaterialCommunityIcons
-          name={event.icon || 'calendar-star'}
-          size={24}
-          color={colors.green}
-        />
-      </View>
-
-      {/* Main Details */}
-      <View style={styles.content}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title} numberOfLines={1}>{event.title}</Text>
+        {/* Sport Category Icon Container */}
+        <View style={styles.categoryIconBox}>
+          <MaterialCommunityIcons
+            name={event.icon || categoryIcon || 'calendar-star'}
+            size={24}
+            color={colors.green}
+          />
         </View>
 
-        <View style={styles.metaRow}>
-          <Ionicons name="calendar-outline" size={13} color={colors.muted} />
-          <Text style={styles.metaText}>{event.short || event.date}</Text>
-        </View>
-
-        <View style={styles.metaRow}>
-          <Ionicons name="location-outline" size={13} color={colors.muted} />
-          {/* Zona do evento; eventos antigos sem zona mostram o local */}
-          <Text style={styles.metaText} numberOfLines={1}>{event.area || event.place}</Text>
-          <Text style={styles.bullet}>•</Text>
-          <View style={styles.levelTag}>
-            <Text style={styles.levelText}>{event.level || 'All levels'}</Text>
+        {/* Main Details */}
+        <View style={styles.content}>
+          <View style={styles.headerRow}>
+            <Text style={styles.title} numberOfLines={1}>{event.title}</Text>
           </View>
-        </View>
 
-        {/* Accessibility Tag if present (António/Senior requirement) */}
-        {event.accessibilityTag && (
-          <View style={styles.accessibilityRow}>
-            <Ionicons name="accessibility-outline" size={12} color={colors.green} />
-            <Text style={styles.accessibilityText}>{event.accessibilityTag}</Text>
+          <View style={styles.metaRow}>
+            <Ionicons name="calendar-outline" size={13} color={colors.muted} />
+            <Text style={styles.metaText}>{event.short || event.date}</Text>
           </View>
-        )}
-      </View>
+
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={13} color={colors.muted} />
+            <Text style={styles.metaText} numberOfLines={1}>{event.area || event.place}</Text>
+            <Text style={styles.bullet}>•</Text>
+            <View style={styles.levelTag}>
+              <Text style={styles.levelText}>{event.level || 'All levels'}</Text>
+            </View>
+          </View>
+
+          {/* Accessibility Tag if present */}
+          {event.accessibilityTag && (
+            <View style={styles.accessibilityRow}>
+              <Ionicons name="accessibility-outline" size={12} color={colors.green} />
+              <Text style={styles.accessibilityText}>{event.accessibilityTag}</Text>
+            </View>
+          )}
+        </View>
       </Pressable>
 
-      {/* Status or Join Action (or a custom trailing element like the Review button) */}
+      {/* Status or Join Action */}
       <View style={styles.actionContainer}>
         {right ? (
           right
@@ -219,7 +223,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 58,
   },
-
   joinButton: {
     width: 38,
     height: 38,
@@ -228,11 +231,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   joinButtonPressed: {
     opacity: 0.8,
   },
-
   badge: {
     minWidth: 58,
     height: 32,
@@ -241,15 +242,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   badgeGoing: {
     backgroundColor: colors.green,
   },
-
   badgeHosting: {
     backgroundColor: colors.orange,
   },
-
   badgeText: {
     color: '#FFFFFF',
     fontWeight: '700',

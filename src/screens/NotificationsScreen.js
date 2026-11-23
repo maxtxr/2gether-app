@@ -86,7 +86,6 @@ export default function NotificationsScreen({ navigation }) {
       <View style={styles.row}>
         <Text style={styles.sub}>{unreadCount} unread</Text>
 
-        {/* Só faz sentido mostrar as ações quando há notificações */}
         {notifications.length > 0 && (
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {unreadCount > 0 && (
@@ -110,65 +109,62 @@ export default function NotificationsScreen({ navigation }) {
 
           {items.map((n) => (
             <View key={n.id} style={styles.card}>
-            <Pressable
-              style={styles.cardMain}
-              onPress={async () => {
-                try {
-                  await markRead(n.id);
+              <Pressable
+                style={styles.cardMain}
+                onPress={async () => {
+                  try {
+                    await markRead(n.id);
 
-                  if (n.type === 'message' && n.eventId) {
-                    const event = events.find((e) => e.id === n.eventId);
+                    if (n.type === 'message' && n.eventId) {
+                      const event = events.find((e) => e.id === n.eventId);
 
-                    if (event?.host_id === user?.id) {
-                      // O utilizador é o organizador
-                      navigation.navigate('EventChats', {
-                        eventId: n.eventId,
-                      });
-                    } else if (n.conversationId) {
-                      // O utilizador é o participante
-                      navigation.navigate('Chat', {
-                        conversationId: n.conversationId,
-                        eventId: n.eventId,
-                        otherName: event?.host,
-                      });
-                    } else {
+                      if (event?.host_id === user?.id) {
+                        navigation.navigate('EventChats', {
+                          eventId: n.eventId,
+                        });
+                      } else if (n.conversationId) {
+                        navigation.navigate('Chat', {
+                          conversationId: n.conversationId,
+                          eventId: n.eventId,
+                          otherName: event?.host,
+                        });
+                      } else {
+                        navigation.navigate('EventDetail', {
+                          id: n.eventId,
+                        });
+                      }
+                    } else if (n.eventId && iconFor(n) === 'star-outline') {
+                      navigation.navigate('Review', { id: n.eventId });
+                    } else if (n.eventId) {
                       navigation.navigate('EventDetail', {
                         id: n.eventId,
                       });
                     }
-                  } else if (n.eventId && iconFor(n) === 'star-outline') {
-                    // "How was it?": abre logo o ecrã da review
-                    navigation.navigate('Review', { id: n.eventId });
-                  } else if (n.eventId) {
-                    navigation.navigate('EventDetail', {
-                      id: n.eventId,
-                    });
+                  } catch (error) {
+                    Alert.alert('Notification error', error.message);
                   }
-                } catch (error) {
-                  Alert.alert('Notification error', error.message);
-                }
-              }}
-              accessibilityRole="button"
-            >
-              <View style={styles.icon}>
-                <Ionicons
-                  name={iconFor(n)}
-                  size={20}
-                  color={colors.green}
-                />
-              </View>
+                }}
+                accessibilityRole="button"
+              >
+                <View style={styles.icon}>
+                  <Ionicons
+                    name={iconFor(n)}
+                    size={18}
+                    color={colors.green}
+                  />
+                </View>
 
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{n.title}</Text>
-                <Text style={styles.body}>{n.message}</Text>
+                <View style={styles.content}>
+                  <Text style={styles.cardTitle}>{n.title}</Text>
+                  <Text style={styles.body}>{n.message}</Text>
 
-                <Text style={styles.time}>
-                  {timeLabel(n.createdAt, g === 'Earlier')}
-                </Text>
-              </View>
+                  <Text style={styles.time}>
+                    {timeLabel(n.createdAt, g === 'Earlier')}
+                  </Text>
+                </View>
 
-              {!n.read && <View style={styles.dot} />}
-            </Pressable>
+                {!n.read && <View style={styles.dot} />}
+              </Pressable>
 
               <Pressable
                 onPress={() => deleteNotification(n.id)}
@@ -179,7 +175,7 @@ export default function NotificationsScreen({ navigation }) {
               >
                 <Ionicons
                   name="trash-outline"
-                  size={20}
+                  size={17}
                   color={colors.muted}
                 />
               </Pressable>
@@ -214,68 +210,109 @@ export default function NotificationsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  title: { fontSize: 24, fontWeight: '800', color: colors.green },
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.green,
+  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 6,
   },
-  sub: { color: colors.muted },
+  sub: {
+    color: colors.muted,
+  },
   action: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: radii.pill,
     backgroundColor: colors.chip,
   },
-  actionText: { fontWeight: '700', color: colors.text, fontSize: 13 },
+  actionText: {
+    fontWeight: '700',
+    color: colors.text,
+    fontSize: 12,
+  },
   deleteBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: colors.chip,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 6,
+    alignSelf: 'center',
   },
   group: {
     fontWeight: '700',
     color: colors.text,
     marginTop: 14,
-    marginBottom: 8,
+    marginBottom: 7,
   },
   card: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
+    minHeight: 70,
   },
   cardMain: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    minHeight: 48,
   },
   icon: {
     width: 36,
     height: 36,
+    flexShrink: 0,
     borderRadius: 18,
     backgroundColor: colors.chip,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
-  cardTitle: { fontWeight: '700', color: colors.text },
-  body: { color: colors.text, marginTop: 2, fontSize: 13 },
-  time: { color: colors.muted, fontSize: 12, marginTop: 4 },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 0,
+    paddingVertical: 2,
+  },
+  cardTitle: {
+    fontWeight: '700',
+    color: colors.text,
+    fontSize: 13,
+  },
+  body: {
+    color: colors.text,
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  time: {
+    color: colors.muted,
+    fontSize: 11,
+    marginTop: 4,
+  },
   dot: {
     width: 8,
     height: 8,
+    flexShrink: 0,
     borderRadius: 4,
     backgroundColor: colors.orange,
-    marginTop: 6,
-    marginRight: 4,
+    marginLeft: 8,
   },
-  empty: { textAlign: 'center', color: colors.muted, marginTop: 60 },
+  empty: {
+    textAlign: 'center',
+    color: colors.muted,
+    marginTop: 60,
+  },
 });

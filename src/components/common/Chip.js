@@ -1,5 +1,5 @@
 import { Pressable, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme';
 
 export default function Chip({ label, icon, selected, onPress, style }) {
@@ -18,7 +18,7 @@ export default function Chip({ label, icon, selected, onPress, style }) {
       ]}
     >
       {icon && (
-        <Ionicons
+        <MaterialCommunityIcons
           name={icon}
           size={16}
           color={selected ? '#FFFFFF' : colors.text}

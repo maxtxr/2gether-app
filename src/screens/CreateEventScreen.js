@@ -19,10 +19,10 @@ const Marker = Platform.OS !== 'web'
   ? require('react-native-maps').Marker
   : null;
 
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors, radii } from '../theme';
-import { LEVELS, ACCESSIBILITY } from '../data/options';
+import { LEVELS, ACCESSIBILITY, EVENT_CATEGORIES } from '../data/options';
 import { useApp } from '../context/AppContext';
 import { Chip, Button, ConfirmModal } from '../components';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -150,6 +150,7 @@ export default function CreateEventScreen({ navigation, route }) {
       setTime(dateParts[1]);
     }
   }, [eventToEdit]);
+
   const selectedSearchQuery = useRef(null);
 
   const today = new Date();
@@ -489,7 +490,7 @@ export default function CreateEventScreen({ navigation, route }) {
           <Text style={styles.selectionText}>{category}</Text>
         </View>
 
-        <MaterialCommunityIcons
+        <Ionicons
           name="chevron-down"
           size={22}
           color={colors.muted}
@@ -515,7 +516,7 @@ export default function CreateEventScreen({ navigation, route }) {
               {subcategory || 'Select a subcategory'}
             </Text>
 
-            <MaterialCommunityIcons
+            <Ionicons
               name={showSubcategoryDropdown ? 'chevron-up' : 'chevron-down'}
               size={22}
               color={colors.muted}
@@ -544,8 +545,8 @@ export default function CreateEventScreen({ navigation, route }) {
                   </Text>
 
                   {subcategory === item && (
-                    <MaterialCommunityIcons
-                      name="check"
+                    <Ionicons
+                      name="checkmark"
                       size={19}
                       color={colors.green}
                     />
@@ -587,12 +588,13 @@ export default function CreateEventScreen({ navigation, route }) {
       <Text style={styles.label}>Accessibility</Text>
 
       <View style={styles.wrap}>
-        {ACCESSIBILITY.map((a) => (
+        {ACCESSIBILITY.map((item) => (
           <Chip
-            key={a}
-            label={a}
-            selected={access.includes(a)}
-            onPress={() => toggleAccess(a)}
+            key={item.name}
+            label={item.name}
+            icon={item.icon}
+            selected={access.includes(item.name)}
+            onPress={() => toggleAccess(item.name)}
           />
         ))}
       </View>
@@ -731,7 +733,7 @@ export default function CreateEventScreen({ navigation, route }) {
                 mode="date"
                 display="spinner"
                 minimumDate={new Date()}
-                onValueChange={handleDateChange}
+                onChange={handleDateChange}
                 locale="en-GB"
                 themeVariant="light"
                 textColor="#222222"
@@ -779,7 +781,7 @@ export default function CreateEventScreen({ navigation, route }) {
                 value={tempTime}
                 mode="time"
                 display="spinner"
-                onValueChange={handleTimeChange}
+                onChange={handleTimeChange}
                 themeVariant="light"
                 textColor="#222222"
                 locale="en-GB"
@@ -796,7 +798,7 @@ export default function CreateEventScreen({ navigation, route }) {
           mode="date"
           display="calendar"
           minimumDate={new Date()}
-          onValueChange={handleDateChange}
+          onChange={handleDateChange}
           onDismiss={() => setShowDatePicker(false)}
           locale="en-GB"
         />
@@ -808,7 +810,7 @@ export default function CreateEventScreen({ navigation, route }) {
           value={tempTime}
           mode="time"
           display="clock"
-          onValueChange={handleTimeChange}
+          onChange={handleTimeChange}
           onDismiss={() => setShowTimePicker(false)}
           is24Hour
         />
@@ -868,8 +870,8 @@ export default function CreateEventScreen({ navigation, route }) {
         <View style={styles.previewModalContainer}>
           <View style={styles.previewHeader}>
             <Pressable onPress={() => setShowPreview(false)}>
-              <MaterialCommunityIcons
-                name="arrow-left"
+              <Ionicons
+                name="arrow-back"
                 size={26}
                 color={colors.text}
               />
@@ -893,6 +895,7 @@ export default function CreateEventScreen({ navigation, route }) {
               event={{
                 id: 'preview',
                 title: title.trim(),
+                category,
                 icon: selectedCategory.icon,
                 short: `${formatDate(date)}, ${time.trim()}`,
                 date: `${formatDate(date)}, ${time.trim()}`,
@@ -951,9 +954,9 @@ export default function CreateEventScreen({ navigation, route }) {
 
             <Button
               title={
-                isSubmitting 
-                ? (isEditing ? 'Saving...' : 'Publishing...')
-                : (isEditing ? 'Save Changes' : 'Publish Event')
+                isSubmitting
+                  ? (isEditing ? 'Saving...' : 'Publishing...')
+                  : (isEditing ? 'Save Changes' : 'Publish Event')
               }
               disabled={isSubmitting}
               onPress={submit}
@@ -1104,7 +1107,7 @@ export default function CreateEventScreen({ navigation, route }) {
               </Text>
 
               <Pressable onPress={() => setShowCategoryModal(false)}>
-                <MaterialCommunityIcons
+                <Ionicons
                   name="close"
                   size={24}
                   color={colors.muted}
@@ -1152,6 +1155,7 @@ export default function CreateEventScreen({ navigation, route }) {
           </Pressable>
         </Pressable>
       </Modal>
+
       <ConfirmModal
         visible={done}
         title={isEditing ? 'Event updated!' : 'Event published!'}
