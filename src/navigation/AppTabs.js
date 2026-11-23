@@ -6,12 +6,15 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
 import { colors } from '../theme';
-import HeaderLogo, { headerOptions } from './AppHeader';
+import HeaderLogo, {
+  headerOptions,
+  HeaderNotificationsButton,
+  HeaderChatsButton,
+} from './AppHeader';
 
 import HomeScreen from '../screens/HomeScreen';
 import ExploreScreen from '../screens/ExploreScreen';
 import MyEventsScreen from '../screens/MyEventsScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
@@ -20,9 +23,8 @@ const Tab = createBottomTabNavigator();
 export const TABS = {
   Home: { label: 'Home', icon: 'home-outline', iconOn: 'home' },
   Search: { label: 'Search', icon: 'search-outline', iconOn: 'search' },
-  MyEvents: { label: 'My events', icon: 'calendar-outline', iconOn: 'calendar' },
-  // "Alerts" (as in the Stage 3 mockups): "Notifications" does not fit under the icon
-  Notifications: { label: 'Alerts', icon: 'notifications-outline', iconOn: 'notifications' },
+  Create: { label: 'Create', icon: 'add', iconOn: 'add' },
+  MyEvents: { label: 'Events', icon: 'calendar-outline', iconOn: 'calendar' },
   Profile: { label: 'Profile', icon: 'person-outline', iconOn: 'person' },
 };
 
@@ -35,15 +37,16 @@ const ICON_CIRCLE_SIZE = 36;
 const ICON_BOX = { width: ICON_CIRCLE_SIZE, height: ICON_CIRCLE_SIZE };
 const ICON_SIZE = 22;
 
+// Orange fill diameter (pre-border). Border is added outside so the + stays this size.
+const CREATE_SIZE = 58;
+const CREATE_BORDER = 5;
+const CREATE_OUTER = CREATE_SIZE + CREATE_BORDER * 2;
+
 // Height of the bar itself (the bottom safe-area inset is added on top of it).
-// Raise/lower this to give the icons more or less breathing room.
 const TAB_BAR_HEIGHT = 60;
 
-// Labels under the icons (Testing Day feedback: users look for "My events").
 const SHOW_LABELS = true;
 
-// React Navigation pads each tab by 5px and aligns its content to the top, so
-// add the leftover space as a top margin to sit the icon in the middle.
 const TAB_ITEM_PADDING = 5;
 const ICON_TOP_MARGIN = Math.max(
   0,
@@ -62,48 +65,92 @@ function TabIcon({ focused, color, config }) {
   );
 }
 
+/** Giant orange + in the centre of the tab bar → Create event. */
+function CreateTabIcon() {
+  return (
+    <View style={styles.createBtn}>
+      <Ionicons name="add" size={36} color="#fff" />
+    </View>
+  );
+}
+
+/** Dummy screen — Create tab never stays focused; it opens CreateEvent. */
+function CreatePlaceholder() {
+  return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+}
+
 export default function AppTabs() {
   const { unreadCount } = useApp();
   const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => {
+      screenOptions={({ route, navigation }) => {
         const config = TABS[route.name];
+        const isCreate = route.name === 'Create';
 
         return {
           ...headerOptions,
           headerTitle: () => <HeaderLogo />,
-          tabBarLabel: config.label,
-          // Kept for accessibility/screen readers even when hidden.
+          headerLeft: () => (
+            <HeaderNotificationsButton
+              unreadCount={unreadCount}
+              onPress={() =>
+                navigation.getParent()?.navigate('Notifications')
+              }
+            />
+          ),
+          headerRight: () => (
+            <HeaderChatsButton
+              onPress={() => navigation.getParent()?.navigate('Chats')}
+            />
+          ),
+          tabBarLabel: isCreate ? () => null : config.label,
           tabBarShowLabel: SHOW_LABELS,
-          // Always under the icon, centred (wide screens default to beside the icon)
           tabBarLabelPosition: 'below-icon',
           tabBarActiveTintColor: '#fff',
           tabBarInactiveTintColor: '#B9CFC5',
-          tabBarStyle: [styles.tabBar, { height: TAB_BAR_HEIGHT + insets.bottom }],
+          tabBarStyle: [
+            styles.tabBar,
+            { height: TAB_BAR_HEIGHT + insets.bottom },
+          ],
           tabBarLabelStyle: styles.tabBarLabel,
-          tabBarIconStyle: {
-            ...ICON_BOX,
-            marginTop: SHOW_LABELS ? undefined : ICON_TOP_MARGIN,
-          },
-          // Keep labels at a fixed size: scaled-up labels on Android squeeze
-          // the icon out of the tab bar.
+          tabBarIconStyle: isCreate
+            ? {
+                width: CREATE_OUTER,
+                height: CREATE_OUTER,
+                marginTop: -18,
+              }
+            : {
+                ...ICON_BOX,
+                marginTop: SHOW_LABELS ? undefined : ICON_TOP_MARGIN,
+              },
           tabBarAllowFontScaling: false,
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon focused={focused} color={color} config={config} />
-          ),
+          tabBarIcon: ({ focused, color }) =>
+            isCreate ? (
+              <CreateTabIcon />
+            ) : (
+              <TabIcon focused={focused} color={color} config={config} />
+            ),
         };
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Search" component={ExploreScreen} />
-      <Tab.Screen name="MyEvents" component={MyEventsScreen} />
       <Tab.Screen
-        name="Notifications"
-        component={NotificationsScreen}
-        options={{ tabBarBadge: unreadCount > 0 ? unreadCount : undefined }}
+        name="Create"
+        component={CreatePlaceholder}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.getParent()?.navigate('CreateEvent');
+          },
+        })}
+        options={{
+          tabBarAccessibilityLabel: 'Create event',
+        }}
       />
+      <Tab.Screen name="MyEvents" component={MyEventsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -128,5 +175,15 @@ const styles = StyleSheet.create({
   },
   iconCircleActive: {
     backgroundColor: colors.greenLight,
+  },
+  createBtn: {
+    width: CREATE_OUTER,
+    height: CREATE_OUTER,
+    borderRadius: CREATE_OUTER / 2,
+    backgroundColor: colors.orange,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: CREATE_BORDER,
+    borderColor: colors.green,
   },
 });

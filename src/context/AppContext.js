@@ -1227,6 +1227,94 @@ export function AppProvider({ children }) {
     });
   };
 
+  // Inbox: todas as conversas em que o utilizador é host ou participante
+  const loadUserConversations = async () => {
+    if (!user) {
+      throw new Error('You must be logged in.');
+    }
+
+    const { data: conversations, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .or(`host_id.eq.${user.id},participant_id.eq.${user.id}`)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!conversations || conversations.length === 0) {
+      return [];
+    }
+
+    const otherUserIds = [
+      ...new Set(
+        conversations.map((c) =>
+          c.host_id === user.id ? c.participant_id : c.host_id
+        )
+      ),
+    ];
+
+    const eventIds = [...new Set(conversations.map((c) => c.event_id))];
+    const conversationIds = conversations.map((c) => c.id);
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, name, avatar_path')
+      .in('id', otherUserIds);
+
+    if (profilesError) throw profilesError;
+
+    const { data: eventData, error: eventsError } = await supabase
+      .from('events')
+      .select('id, title')
+      .in('id', eventIds);
+
+    if (eventsError) throw eventsError;
+
+    const { data: messages, error: messagesError } = await supabase
+      .from('messages')
+      .select('conversation_id, content, created_at, sender_id, read_at')
+      .in('conversation_id', conversationIds)
+      .order('created_at', { ascending: false });
+
+    if (messagesError) throw messagesError;
+
+    const enriched = conversations.map((conversation) => {
+      const otherId =
+        conversation.host_id === user.id
+          ? conversation.participant_id
+          : conversation.host_id;
+
+      const other = profiles?.find((p) => p.id === otherId);
+      const event = eventData?.find((e) => e.id === conversation.event_id);
+
+      const conversationMessages = (messages || []).filter(
+        (m) => m.conversation_id === conversation.id
+      );
+
+      const lastMessage = conversationMessages[0];
+
+      const unreadCount = conversationMessages.filter(
+        (m) => m.sender_id !== user.id && m.read_at === null
+      ).length;
+
+      return {
+        ...conversation,
+        otherName: other?.name || 'User',
+        otherAvatarUrl: avatarPublicUrl(other?.avatar_path),
+        eventTitle: event?.title || 'Event',
+        isHost: conversation.host_id === user.id,
+        lastMessage: lastMessage?.content || 'No messages yet',
+        lastMessageAt: lastMessage?.created_at || conversation.created_at,
+        unreadCount,
+      };
+    });
+
+    // Mais recentes primeiro (por última mensagem)
+    return enriched.sort(
+      (a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt)
+    );
+  };
+
   // Carregar mensagens de uma conversa
   const loadMessages = async (conversationId) => {
     if (!user) return;
@@ -1338,6 +1426,10 @@ export function AppProvider({ children }) {
       ),
     }));
 
+  const upcomingEvents = events.filter(
+    (event) => goingIds.includes(event.id) && !eventHasEnded(event)
+  );
+
   const unreadCount = notifications.filter(
     (notification) => !notification.read
   ).length;
@@ -1437,11 +1529,13 @@ export function AppProvider({ children }) {
     addReview,
     getOrCreateConversation,
     loadEventConversations,
+    loadUserConversations,
     loadMessages,
     markConversationRead,
     sendMessage,
 
     pastEvents,
+    upcomingEvents,
     unreadCount,
     joinedCount,
     hostedEvents,

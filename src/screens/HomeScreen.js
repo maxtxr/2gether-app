@@ -23,6 +23,7 @@ export default function HomeScreen({ navigation }) {
     interests.some(
       (i) =>
         e.sport?.toLowerCase() === i.toLowerCase() ||
+        e.subcategory?.toLowerCase() === i.toLowerCase() ||
         e.category?.toLowerCase() === i.toLowerCase() ||
         (e.title || '').toLowerCase().includes(i.toLowerCase())
     );
@@ -82,7 +83,7 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         <Pressable
-          onPress={() => navigation.navigate('Tabs', { screen: 'Explore' })}
+          onPress={() => navigation.navigate('Tabs', { screen: 'Search' })}
           hitSlop={8}
           accessibilityRole="button"
         >

@@ -71,12 +71,12 @@ export default function EventCard({ event, onPress, right }) {
               {event.area || event.place || 'TBD'}
             </Text>
             {!!event.level && (
-              <>
-                <Text style={styles.bullet}>•</Text>
+              <View style={styles.levelRow}>
+                <Text style={styles.bullet}>{'\u00B7'}</Text>
                 <View style={styles.levelTag}>
                   <Text style={styles.levelText}>{event.level}</Text>
                 </View>
-              </>
+              </View>
             )}
           </View>
 
@@ -190,6 +190,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 4,
     flexShrink: 1,
+  },
+  levelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   bullet: {
     color: colors.muted,

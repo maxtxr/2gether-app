@@ -8,6 +8,7 @@ import {
   Image,
   StyleSheet,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -54,10 +55,18 @@ async function pickPhoto() {
       { compress: quality, format: ImageManipulator.SaveFormat.JPEG }
     );
 
-    const info = await FileSystem.getInfoAsync(manipulated.uri);
+    // expo-file-system.getInfoAsync is unavailable on web — accept first compression
+    if (Platform.OS === 'web') {
+      return manipulated;
+    }
 
-    // Na web o getInfoAsync não sabe o tamanho; aceita a primeira compressão
-    if (!info.exists || info.size === undefined || info.size <= 1024 * 1024) {
+    try {
+      const info = await FileSystem.getInfoAsync(manipulated.uri);
+
+      if (!info.exists || info.size === undefined || info.size <= 1024 * 1024) {
+        return manipulated;
+      }
+    } catch {
       return manipulated;
     }
   }

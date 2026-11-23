@@ -16,7 +16,7 @@ import Slider from '@react-native-community/slider';
 
 import { colors, radii } from '../theme';
 import { EVENT_CATEGORIES, LEVELS, ACCESSIBILITY, SORT_OPTIONS } from '../data/options';
-import { useApp, eventHasEnded } from '../context/AppContext';
+import { useApp, eventHasEnded, getEventDate } from '../context/AppContext';
 import { Chip, EventCard } from '../components';
 import EventMap from '../components/events/EventMap';
 
@@ -37,9 +37,10 @@ const getDistance = (lat1, lng1, lat2, lng2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-const getEventDate = (event) => {
-  const timestamp = new Date(event.when).getTime();
-  return Number.isNaN(timestamp) ? Infinity : timestamp;
+const getEventDateTimestamp = (event) => {
+  // Shared parser — `when` is DD/MM/YYYY, HH:mm (not ISO)
+  const date = getEventDate(event);
+  return date ? date.getTime() : Infinity;
 };
 
 export default function ExploreScreen({ navigation }) {
@@ -322,7 +323,7 @@ export default function ExploreScreen({ navigation }) {
         (a, b) => countOf(b) - countOf(a)
       );
     } else {
-      sorted.sort((a, b) => getEventDate(a) - getEventDate(b));
+      sorted.sort((a, b) => getEventDateTimestamp(a) - getEventDateTimestamp(b));
     }
 
     return sorted;

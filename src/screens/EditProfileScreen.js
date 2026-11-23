@@ -109,8 +109,23 @@ export default function EditProfileScreen({ navigation }) {
             { compress: quality, format: ImageManipulator.SaveFormat.JPEG }
           );
 
-          const info = await FileSystem.getInfoAsync(manipulated.uri);
-          if (info.exists && info.size <= 1024 * 1024) {
+          // expo-file-system.getInfoAsync is unavailable on web — accept first compression
+          if (Platform.OS === 'web') {
+            compressedImage = manipulated;
+            break;
+          }
+
+          try {
+            const info = await FileSystem.getInfoAsync(manipulated.uri);
+            if (
+              !info.exists ||
+              info.size === undefined ||
+              info.size <= 1024 * 1024
+            ) {
+              compressedImage = manipulated;
+              break;
+            }
+          } catch {
             compressedImage = manipulated;
             break;
           }

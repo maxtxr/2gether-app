@@ -18,6 +18,8 @@ import CreateEventScreen from './src/screens/CreateEventScreen';
 import ReviewScreen from './src/screens/ReviewScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import EventChatsScreen from './src/screens/EventChatsScreen';
+import ChatsScreen from './src/screens/ChatsScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
 
 const Stack = createNativeStackNavigator();
@@ -73,6 +75,16 @@ function Root() {
             name="EventChats"
             component={EventChatsScreen}
             options={{ title: 'Event chats' }}
+          />
+          <Stack.Screen
+            name="Chats"
+            component={ChatsScreen}
+            options={{ title: 'Chats' }}
+          />
+          <Stack.Screen
+            name="Notifications"
+            component={NotificationsScreen}
+            options={{ title: 'Alerts' }}
           />
           <Stack.Screen
             name="Chat"

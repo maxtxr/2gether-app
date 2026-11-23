@@ -451,7 +451,7 @@ export default function CreateEventScreen({ navigation, route }) {
         title: title.trim(),
         category,
         subcategory: subcategory || null,
-        sport: category,
+        sport: subcategory || category,
         level,
         description: description.trim(),
         when: `${formatDate(date)}, ${time.trim()}`,
@@ -679,7 +679,7 @@ export default function CreateEventScreen({ navigation, route }) {
         </View>
       </View>
 
-      {date && time.trim() && !isDateTimeValid && (
+      {!!(date && time.trim() && !isDateTimeValid) && (
         <Text style={styles.validationError}>
           Please select a future date and time.
         </Text>
