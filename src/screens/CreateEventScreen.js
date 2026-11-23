@@ -58,45 +58,6 @@ async function lookupLocation({ coordinate, query }) {
   };
 }
 
-// Categorias e respetivos ícones e subcategorias.
-const EVENT_CATEGORIES = [
-  {
-    name: 'Fitness',
-    icon: 'dumbbell',
-    subcategories: ['Gym', 'Strength training', 'Functional training'],
-  },
-  {
-    name: 'Outdoors',
-    icon: 'hiking',
-    subcategories: ['Running', 'Walking', 'Cycling', 'Climbing'],
-  },
-  {
-    name: 'Team Sports',
-    icon: 'soccer',
-    subcategories: ['Football', 'Basketball', 'Volleyball', 'Tennis', 'Handball'],
-  },
-  {
-    name: 'Water Sports',
-    icon: 'swim',
-    subcategories: ['Swimming', 'Surfing', 'Paddleboarding'],
-  },
-  {
-    name: 'Wellness',
-    icon: 'yoga',
-    subcategories: ['Yoga', 'Stretching', 'Meditation'],
-  },
-  {
-    name: 'Social',
-    icon: 'account-group',
-    subcategories: ['Social meetup', 'Sports watching', 'Group activity'],
-  },
-  {
-    name: 'Other',
-    icon: 'dots-horizontal-circle-outline',
-    subcategories: [],
-  },
-];
-
 export default function CreateEventScreen({ navigation, route }) {
   const { createEvent, updateEvent } = useApp();
 

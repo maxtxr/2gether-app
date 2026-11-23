@@ -1,4 +1,3 @@
-import React from 'react';
 import { Pressable, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme';
@@ -37,10 +36,11 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 0,
     borderRadius: radii.pill,
-    minHeight: 40,
+    height: 36,
     backgroundColor: colors.chip,
     marginRight: spacing.sm,
     marginBottom: spacing.sm,
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
   },
   text: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
   textSelected: {
