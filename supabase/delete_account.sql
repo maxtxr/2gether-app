@@ -1,6 +1,3 @@
--- 2gether — apagar a própria conta
--- Corre isto no SQL Editor do Supabase (uma vez).
--- A app limpa o Storage via API e depois chama: supabase.rpc('delete_own_account')
 
 create or replace function public.delete_own_account()
 returns void
