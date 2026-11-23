@@ -9,6 +9,7 @@ import {
   Pressable,
   Platform,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
 
 const MapView = Platform.OS !== 'web'
@@ -70,9 +71,42 @@ export default function CreateEventScreen({ navigation, route }) {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showSubcategoryDropdown, setShowSubcategoryDropdown] = useState(false);
 
-  const selectedCategory = EVENT_CATEGORIES.find(
-    (item) => item.name === category
-  );
+  // Fallback para a última categoria ("Other") se a categoria já não existir
+  const selectedCategory =
+    EVENT_CATEGORIES.find((item) => item.name === category) ||
+    EVENT_CATEGORIES[EVENT_CATEGORIES.length - 1];
+
+  // Dropdown flutuante das subcategorias
+  const { height: windowHeight } = useWindowDimensions();
+  const subcategoryFieldRef = useRef(null);
+  const [dropdownAnchor, setDropdownAnchor] = useState({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  });
+
+  const openSubcategoryDropdown = () => {
+    subcategoryFieldRef.current?.measureInWindow((x, y, width, height) => {
+      setDropdownAnchor({ x, y, width, height });
+      setShowSubcategoryDropdown(true);
+    });
+  };
+
+  const dropdownLayout = (() => {
+    const { x, y, width, height } = dropdownAnchor;
+    const spaceBelow = windowHeight - (y + height) - 16;
+    const spaceAbove = y - 16;
+    const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(
+      120,
+      Math.min(280, openUp ? spaceAbove : spaceBelow)
+    );
+
+    return openUp
+      ? { left: x, width, bottom: windowHeight - y + 4, maxHeight }
+      : { left: x, width, top: y + height + 4, maxHeight };
+  })();
 
   const [level, setLevel] = useState('Beginner');
   const [description, setDescription] = useState('');
@@ -487,7 +521,7 @@ export default function CreateEventScreen({ navigation, route }) {
             size={22}
             color={colors.green}
           />
-          <Text style={styles.selectionText}>{category}</Text>
+          <Text style={styles.selectionText}>{selectedCategory.name}</Text>
         </View>
 
         <Ionicons
@@ -503,8 +537,9 @@ export default function CreateEventScreen({ navigation, route }) {
           <Text style={styles.label}>Subcategory (optional)</Text>
 
           <Pressable
+            ref={subcategoryFieldRef}
             style={styles.selectionInput}
-            onPress={() => setShowSubcategoryDropdown((current) => !current)}
+            onPress={openSubcategoryDropdown}
             disabled={isSubmitting}
           >
             <Text
@@ -522,53 +557,6 @@ export default function CreateEventScreen({ navigation, route }) {
               color={colors.muted}
             />
           </Pressable>
-
-          {showSubcategoryDropdown && (
-            <View style={styles.dropdownOptions}>
-              {selectedCategory.subcategories.map((item) => (
-                <Pressable
-                  key={item}
-                  style={styles.dropdownOption}
-                  onPress={() => {
-                    setSubcategory(item);
-                    setShowSubcategoryDropdown(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.dropdownOptionText,
-                      subcategory === item &&
-                        styles.dropdownOptionTextSelected,
-                    ]}
-                  >
-                    {item}
-                  </Text>
-
-                  {subcategory === item && (
-                    <Ionicons
-                      name="checkmark"
-                      size={19}
-                      color={colors.green}
-                    />
-                  )}
-                </Pressable>
-              ))}
-
-              {subcategory !== '' && (
-                <Pressable
-                  style={styles.dropdownOption}
-                  onPress={() => {
-                    setSubcategory('');
-                    setShowSubcategoryDropdown(false);
-                  }}
-                >
-                  <Text style={styles.clearOptionText}>
-                    Clear selection
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          )}
         </>
       )}
 
@@ -1115,44 +1103,112 @@ export default function CreateEventScreen({ navigation, route }) {
               </Pressable>
             </View>
 
-            <View style={styles.categoryGrid}>
-              {EVENT_CATEGORIES.map((item) => {
-                const selected = category === item.name;
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.categoryGrid}>
+                {EVENT_CATEGORIES.map((item) => {
+                  const selected = category === item.name;
 
-                return (
-                  <Pressable
-                    key={item.name}
-                    style={[
-                      styles.categoryOption,
-                      selected && styles.categoryOptionSelected,
-                    ]}
-                    onPress={() => {
-                      setCategory(item.name);
-                      setSubcategory('');
-                      setShowSubcategoryDropdown(false);
-                      setShowCategoryModal(false);
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    <MaterialCommunityIcons
-                      name={item.icon}
-                      size={30}
-                      color={selected ? colors.green : colors.text}
-                    />
-
-                    <Text
+                  return (
+                    <Pressable
+                      key={item.name}
                       style={[
-                        styles.categoryOptionText,
-                        selected && styles.categoryOptionTextSelected,
+                        styles.categoryOption,
+                        selected && styles.categoryOptionSelected,
                       ]}
+                      onPress={() => {
+                        setCategory(item.name);
+                        setSubcategory('');
+                        setShowSubcategoryDropdown(false);
+                        setShowCategoryModal(false);
+                      }}
+                      disabled={isSubmitting}
                     >
-                      {item.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+                      <MaterialCommunityIcons
+                        name={item.icon}
+                        size={30}
+                        color={selected ? colors.green : colors.text}
+                      />
+
+                      <Text
+                        numberOfLines={2}
+                        style={[
+                          styles.categoryOptionText,
+                          selected && styles.categoryOptionTextSelected,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* SUBCATEGORY DROPDOWN */}
+      <Modal
+        visible={showSubcategoryDropdown}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowSubcategoryDropdown(false)}
+      >
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => setShowSubcategoryDropdown(false)}
+        >
+          <View style={[styles.dropdownMenu, dropdownLayout]}>
+            <ScrollView
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
+              {selectedCategory.subcategories.map((item) => (
+                <Pressable
+                  key={item}
+                  style={styles.dropdownOption}
+                  onPress={() => {
+                    setSubcategory(item);
+                    setShowSubcategoryDropdown(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.dropdownOptionText,
+                      subcategory === item &&
+                        styles.dropdownOptionTextSelected,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+
+                  {subcategory === item && (
+                    <Ionicons
+                      name="checkmark"
+                      size={19}
+                      color={colors.green}
+                    />
+                  )}
+                </Pressable>
+              ))}
+
+              {subcategory !== '' && (
+                <Pressable
+                  style={styles.dropdownOption}
+                  onPress={() => {
+                    setSubcategory('');
+                    setShowSubcategoryDropdown(false);
+                  }}
+                >
+                  <Text style={styles.clearOptionText}>
+                    Clear selection
+                  </Text>
+                </Pressable>
+              )}
+            </ScrollView>
+          </View>
         </Pressable>
       </Modal>
 
@@ -1359,13 +1415,18 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontWeight: '400',
   },
-  dropdownOptions: {
+  dropdownMenu: {
+    position: 'absolute',
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
-    marginTop: 6,
     overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   dropdownOption: {
     minHeight: 46,
@@ -1399,6 +1460,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 32,
+    maxHeight: '85%',
   },
   categoryModalHeader: {
     flexDirection: 'row',

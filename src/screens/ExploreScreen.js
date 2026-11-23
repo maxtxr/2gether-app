@@ -453,8 +453,8 @@ export default function ExploreScreen({ navigation }) {
                 !cat && styles.categorySelected,
               ]}
             >
-              <Ionicons
-                name="apps-outline"
+              <MaterialCommunityIcons
+                name="apps"
                 size={18}
                 color={!cat ? '#fff' : colors.text}
               />
@@ -483,14 +483,16 @@ export default function ExploreScreen({ navigation }) {
                     selected && styles.categorySelected,
                   ]}
                 >
-                  <Ionicons
-                    name={item.icon || 'apps-outline'}
+                  <MaterialCommunityIcons
+                    name={item.icon || 'apps'}
                     size={18}
                     color={selected ? '#fff' : colors.text}
                   />
 
                   <Text
+                    numberOfLines={2}
                     style={[
+                      
                       styles.categoryText,
                       selected && styles.categoryTextSelected,
                     ]}
