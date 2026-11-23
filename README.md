@@ -9,59 +9,69 @@ Built with **React Native + Expo** and a **Supabase** backend (auth, database, s
 ## Features
 
 ### 🏠 Home
+
 - Greeting and **suggested events** ranked by your interests
 - **Feed** of reviews and photos from past events
 
 ### 🔍 Search
-- Search by name, place, area or sport
-- Filter by category, level and accessibility (wheelchair friendly, flat terrain, low intensity, all ages)
+
+- Search by name, place, area, sport or subcategory
+- Filter by category, subcategory, level, accessibility (wheelchair friendly, flat terrain, low intensity, all ages, no equipment needed) and distance
+- Date filter and sorting (nearest, soonest, most participants)
 - **List / Map view toggle**: tap a pin to open the event
 
 ### 📅 My events
+
 - **Upcoming**: events you're going to and events you host
-- **Past**: events you attended, with a **Review** button (★ rating shown once reviewed)
-- **Create event**: name, category, level, accessibility tags, date & time pickers, location picked on a map (with address search), capacity and an optional photo
+- **Past**: events you attended, with a **Review** button (★ rating shown once reviewed), and events you hosted
+- **Create event**: name, category and subcategory, level, accessibility tags, date & time pickers, location picked on a map (with address search) and capacity
 
 ### 📍 Event detail
+
 - Host, date, place, participants, spots left and accessibility badges
 - **Join** / **Cancel participation**
 - **Waitlist** when the event is full (you get a notification when a spot opens)
-- **Message organizer**, available before joining. Hosts get **View chats** with every participant.
+- **Message organizer**, available before joining. Hosts get **Chats** with every participant.
+- Hosts of upcoming events can **edit** or **delete** the event
 - After the event: **Leave a review** opens the review screen (also reachable from My events → Past → Review)
 
 ### ⭐ Review
+
 - Star rating (starts empty), written review and optional photo
 - **"Was the accessibility info accurate?"** (Yes / Partly / No), only for events with accessibility tags, shown on the review afterwards
 
 ### 🔔 Notifications *(badge on the tab)*
+
 - Someone joined your event, new messages, spot available on a waitlist, event created
 - Tap to open the related event or chat, mark one/all as read, delete one, **clear all**
 - Realtime: new notifications appear without refreshing
 
 ### 👤 Profile
+
 - Photo (avatar upload), name, bio and interests (editable)
 - Gamified **badges** (First Event, Social Butterfly, Host)
 - Attended events, received reviews and average rating
 - Settings, log out
 
 ### 🔐 Auth
+
 - Sign up / log in with email and password (Supabase Auth), with inline validation and password rules
 
 ## Tech stack
 
 | | |
-|---|---|
+| --- | --- |
 | Framework | React Native 0.88 · React 19.3 · Expo SDK 58 |
 | Navigation | React Navigation 7 (native-stack + bottom tabs) |
 | Backend | Supabase (Postgres + Row Level Security, Auth, Storage, Realtime) |
 | Maps | `react-native-maps` (Apple Maps on iOS, Google Maps on Android) |
 | Media | `expo-image-picker`, `expo-image-manipulator` |
-| Icons | `@expo/vector-icons` (Ionicons) |
+| Icons | `@expo/vector-icons` (Ionicons, MaterialCommunityIcons) |
 | State | React Context (`src/context/AppContext.js`) |
 
 ## Requirements
 
-- **Node.js 18+** and npm
+- **Node.js 22.13+** and npm (required by Expo SDK 58)
 - **Expo Go** on your phone (Android/iOS), or an emulator/simulator
 - Phone and computer on the same Wi-Fi (or use tunnel mode, see below)
 - A `.env` file with the Supabase credentials (see below)
@@ -72,7 +82,7 @@ Built with **React Native + Expo** and a **Supabase** backend (auth, database, s
 
 Create a `.env` file in the project root (it is git-ignored):
 
-```
+```env
 EXPO_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
@@ -118,8 +128,16 @@ Setup:
 
 1. In Supabase → **Authentication → Users → Add user** (tick *Auto Confirm User*), create:
    `joao@2gether.test` (the tester), `maya@2gether.test` and `paul@2gether.test`.
-2. In Supabase → **SQL Editor**, run `supabase/avatar.sql` (profile photos), `supabase/notifications.sql` (notify hosts when someone joins) and `supabase/reviews_accessibility.sql` (accessibility question in reviews) once, then run `supabase/seed.sql`.
-3. Log in as `joao@2gether.test`.
+2. Enable **pg_cron** in Database → Extensions (the daily reset uses it).
+3. In Supabase → **SQL Editor**, run these in this order:
+   - `supabase/avatar.sql` — profile photos
+   - `supabase/events_subcategory_icon.sql` — event subcategories and icons
+   - `supabase/notifications.sql` — notify hosts when someone joins
+   - `supabase/reviews_accessibility.sql` — accessibility question in reviews
+   - `supabase/seed.sql` — test data and the daily reset
+4. Log in as `joao@2gether.test`.
+
+These files are idempotent, so re-run the relevant ones after pulling changes that touch the database. The base tables, RLS policies, functions and storage buckets already exist in the shared Supabase project and are not recreated by these files.
 
 `seed.sql` creates the database function `public.reset_test_data()` and schedules it with `pg_cron` to run **every day at 04:00 UTC**, so the test data (with dates relative to that day) is always fresh, whenever the app is evaluated. It only deletes and recreates the rows of the three test accounts.
 
@@ -131,24 +149,27 @@ select public.reset_test_data();
 
 ## Project structure
 
-```
+```text
 App.js                     # root navigator (auth stack vs. app stack), web alert shim
 lib/supabase.js            # Supabase client (reads .env)
 supabase/
   avatar.sql               # avatars bucket + profiles.avatar_path column
+  events_subcategory_icon.sql # events.subcategory and events.icon columns
   notifications.sql        # trigger: notify the host when someone joins their event
   reviews_accessibility.sql # reviews.accessibility_accuracy (yes / partly / no)
   seed.sql                 # test data for the scenarios + daily automatic reset (pg_cron)
 src/
   context/AppContext.js    # global state + all Supabase calls (auth, events, chats, notifications, reviews, badges)
   navigation/              # bottom tabs and shared header
-  data/options.js          # categories, levels, accessibility options
+  data/options.js          # categories, subcategories, icons, levels, accessibility options
   theme/index.js           # colors, spacing, radii, level colors
   components/
     common/                # Avatar, Button, Chip, ConfirmModal, Logo, Stars
     events/                # EventCard, AccessibilityBadge, EventMap (+ .web fallback)
+    profile/               # EditProfileModal, ProfileComponents
+  utils/validation.js      # email and password validation
   screens/                 # Login, SignUp, Home, Explore (Search), MyEvents, Notifications,
-                           # Profile, Settings, EventDetail, CreateEvent, Chat, EventChats
+                           # Profile, Settings, EventDetail, CreateEvent, Review, Chat, EventChats
 assets/                    # app icon, splash, favicon, Android adaptive icons
 ```
 
@@ -162,10 +183,8 @@ assets/                    # app icon, splash, favicon, Android adaptive icons
 These parts of the interface are visible but are placeholders:
 
 - Settings: language, time format, accessibility, theme and notification preferences ("Coming soon")
-- Search: "Change area" / distance radius, and a date filter
 - "Forgot password?" only shows a message, no email is sent
 - "Delete account" only logs out
-- Hosts cannot edit or cancel an event after creating it
 
 ## License
 

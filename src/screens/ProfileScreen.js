@@ -1,462 +1,253 @@
-import { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system/legacy';
+import React, { useState, useMemo } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 
 import { colors, radii } from '../theme';
-import { CATEGORIES } from '../data/options';
 import { useApp } from '../context/AppContext';
-import { Avatar, Button, Chip, Stars } from '../components';
+import { Chip } from '../components';
+
+import {
+  ProfileHeader,
+  StatsRow,
+  PendingReviewBanner,
+  EventsCardList,
+  BadgesGrid,
+  ReviewsList,
+} from '../components/profile/ProfileComponents';
 
 export default function ProfileScreen({ navigation }) {
   const {
     user,
-    updateProfile,
-    uploadAvatar,
-    joinedCount,
-    hostedEvents,
-    pastEvents,
-    badges,
-    receivedReviews,
+    joinedCount = 0,
+    upcomingEvents = [],
+    hostedEvents = [],
+    pastEvents = [],
+    badges = [],
+    receivedReviews = [],
     averageRating,
   } = useApp();
 
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(user?.name || '');
-  const [bio, setBio] = useState(user?.bio || '');
-  const [interests, setInterests] = useState(user?.interests || []);
-  const [saving, setSaving] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [activeEventTab, setActiveEventTab] = useState('upcoming'); // 'upcoming' | 'hosted' | 'past'
 
-  useEffect(() => {
-    if (!editing) {
-      setName(user?.name || '');
-      setBio(user?.bio || '');
-      setInterests(user?.interests || []);
-    }
-  }, [user, editing]);
+  const safeInterests = Array.isArray(user?.interests) ? user.interests : [];
+  const safeAccessibility = Array.isArray(user?.accessibility) ? user.accessibility : [];
+  const safeBadges = Array.isArray(badges) ? badges : [];
+  const safeUpcoming = Array.isArray(upcomingEvents) ? upcomingEvents : [];
+  const safeHosted = Array.isArray(hostedEvents) ? hostedEvents : [];
+  const safePast = Array.isArray(pastEvents) ? pastEvents : [];
+  const safeReviews = Array.isArray(receivedReviews) ? receivedReviews : [];
 
-  const toggleInterest = (interest) => {
-    setInterests((current) =>
-      current.includes(interest)
-        ? current.filter((item) => item !== interest)
-        : [...current, interest]
-    );
-  };
+  const eventNeedingReview = useMemo(() => {
+    return safePast.find((e) => !e.reviewed);
+  }, [safePast]);
 
-  const save = async () => {
-    try {
-      setSaving(true);
-      await updateProfile({
-        name: name.trim() || user.name,
-        bio: bio.trim(),
-        interests,
-      });
-      setEditing(false);
-    } catch (error) {
-      Alert.alert('Error', error.message || 'Could not save profile.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const pickAvatar = async () => {
-    try {
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permission.granted) {
-        Alert.alert(
-          'Permission required',
-          'Please allow access to your photo library.'
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 1,
-      });
-
-      if (result.canceled) return;
-
-      const asset = result.assets[0];
-      setUploadingAvatar(true);
-
-      const dimensions = [800, 640, 512];
-      const qualities = [0.8, 0.7, 0.6, 0.5];
-      let compressedImage = null;
-
-      for (const maxDimension of dimensions) {
-        const actions = [];
-        const longestSide = Math.max(asset.width, asset.height);
-
-        if (longestSide > maxDimension) {
-          actions.push(
-            asset.width >= asset.height
-              ? { resize: { width: maxDimension } }
-              : { resize: { height: maxDimension } }
-          );
-        }
-
-        for (const quality of qualities) {
-          const manipulated = await ImageManipulator.manipulateAsync(
-            asset.uri,
-            actions,
-            {
-              compress: quality,
-              format: ImageManipulator.SaveFormat.JPEG,
-            }
-          );
-
-          const info = await FileSystem.getInfoAsync(manipulated.uri);
-
-          if (info.exists && info.size <= 1024 * 1024) {
-            compressedImage = manipulated;
-            break;
-          }
-        }
-
-        if (compressedImage) break;
-      }
-
-      if (!compressedImage) {
-        Alert.alert(
-          'Image too large',
-          'Could not compress this image below 1 MB. Please choose another photo.'
-        );
-        return;
-      }
-
-      await uploadAvatar(compressedImage.uri);
-    } catch (error) {
-      console.error('Error uploading avatar:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Could not update profile photo.'
-      );
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
-
-  const ratingLabel =
-    averageRating == null ? '—' : String(averageRating);
+  const currentTabEvents =
+    activeEventTab === 'upcoming'
+      ? safeUpcoming
+      : activeEventTab === 'hosted'
+      ? safeHosted
+      : safePast;
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ padding: 16 }}
-      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
-      <View style={styles.top}>
-        <Pressable
-          onPress={pickAvatar}
-          disabled={uploadingAvatar}
-          accessibilityRole="button"
-          accessibilityLabel="Change profile photo"
-          style={styles.avatarWrap}
-        >
-          <Avatar
-            source={user?.avatarUrl}
-            name={user?.name}
-            size={72}
-          />
-          <View style={styles.cameraBadge}>
-            {uploadingAvatar ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="camera" size={14} color="#fff" />
-            )}
-          </View>
-        </Pressable>
+      {/* 1. Header (Static Avatar + Edit Button + Settings Cog) */}
+      <ProfileHeader
+        user={user}
+        onEditPress={() => navigation.navigate('EditProfile')}
+        onSettingsPress={() => navigation.navigate('Settings')}
+      />
 
-        <View style={{ flex: 1, marginLeft: 14 }}>
-          {editing ? (
-            <>
-              <TextInput
-                style={styles.edit}
-                value={name}
-                onChangeText={setName}
-                placeholder="Name"
-                placeholderTextColor={colors.muted}
-              />
-              <TextInput
-                style={styles.edit}
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Bio"
-                placeholderTextColor={colors.muted}
-              />
-            </>
+      {/* 2. Key Stats Counter */}
+      <StatsRow
+        joinedCount={joinedCount || safeUpcoming.length + safePast.length}
+        hostedCount={safeHosted.length}
+        rating={averageRating}
+      />
+
+      {/* 3. Event Needing Review (If any past event isn't reviewed yet) */}
+      {eventNeedingReview && (
+        <PendingReviewBanner
+          event={eventNeedingReview}
+          onReview={(event) =>
+            navigation.navigate('LeaveReview', { eventId: event.id, title: event.title })
+          }
+        />
+      )}
+
+      {/* 4. Interests & Sports */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Sports & Interests</Text>
+          <Text style={styles.badgeText}>{safeInterests.length}</Text>
+        </View>
+        <View style={styles.wrap}>
+          {safeInterests.length > 0 ? (
+            safeInterests.map((interest) => <Chip key={interest} label={interest} />)
           ) : (
-            <>
-              <Text style={styles.name}>{user?.name}</Text>
-              <Text style={styles.bio}>{user?.bio}</Text>
-              <Text style={styles.since}>Member since {user?.since}</Text>
-            </>
+            <Text style={styles.emptyHint}>No sports or interests added yet.</Text>
           )}
         </View>
       </View>
 
-      <Button
-        title={editing ? (saving ? 'Saving…' : 'Save') : 'Edit profile'}
-        variant={editing ? 'primary' : 'outline'}
-        icon={editing ? undefined : 'pencil-outline'}
-        onPress={editing ? save : () => setEditing(true)}
-        disabled={saving}
-        style={{ marginTop: 14 }}
-      />
-
-      <Text style={styles.section}>Interests</Text>
-      {editing ? (
-        <View style={styles.wrap}>
-          {CATEGORIES.map((interest) => (
-            <Chip
-              key={interest}
-              label={interest}
-              selected={interests.includes(interest)}
-              onPress={() => toggleInterest(interest)}
-            />
-          ))}
+      {/* 5. Accessibility Preferences */}
+      {safeAccessibility.length > 0 && (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Accessibility & Comfort</Text>
+            <Text style={styles.badgeText}>{safeAccessibility.length}</Text>
+          </View>
+          <View style={styles.wrap}>
+            {safeAccessibility.map((tag) => (
+              <Chip key={tag} label={tag} />
+            ))}
+          </View>
         </View>
-      ) : interests.length > 0 ? (
-        <View style={styles.wrap}>
-          {interests.map((interest) => (
-            <Chip key={interest} label={interest} />
-          ))}
-        </View>
-      ) : (
-        <Text style={styles.emptyHint}>
-          Add interests while editing your profile.
-        </Text>
       )}
 
-      <View style={styles.stats}>
-        <Stat value={joinedCount} label="Joined" />
-        <Stat value={hostedEvents.length} label="Hosted" />
-        <Stat value={ratingLabel} label="Rating" />
-      </View>
-
-      <Text style={styles.section}>Badges</Text>
-      <View style={styles.badges}>
-        {badges.map((b) => (
-          <View
-            key={b.id}
-            style={[styles.badge, !b.earned && { opacity: 0.45 }]}
-          >
-            <Text style={{ fontSize: 26 }}>
-              {b.earned ? b.icon : '🔒'}
-            </Text>
-            <Text style={styles.badgeName}>{b.name}</Text>
-            <Text style={styles.badgeHint}>
-              {b.earned ? 'Unlocked' : b.hint}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      <Text style={styles.section}>Attended events</Text>
-      {pastEvents.length === 0 ? (
-        <Text style={styles.emptyHint}>
-          Events you join will show here after they end.
-        </Text>
-      ) : (
-        pastEvents.map((e) => (
+      {/* 6. Events Hub (Upcoming / Hosted / Past Tab switcher) */}
+      <View style={styles.card}>
+        <View style={styles.tabBar}>
           <Pressable
-            key={e.id}
-            style={styles.attended}
-            onPress={() =>
-              navigation.navigate('EventDetail', { id: e.id })
-            }
+            onPress={() => setActiveEventTab('upcoming')}
+            style={[styles.tabBtn, activeEventTab === 'upcoming' && styles.tabBtnActive]}
           >
-            <Ionicons
-              name="checkmark-circle"
-              size={18}
-              color={colors.green}
-            />
-            <Text style={styles.attendedText}>
-              {e.title}
-              {e.area ? ` · ${e.area}` : ''}
+            <Text
+              style={[
+                styles.tabBtnText,
+                activeEventTab === 'upcoming' && styles.tabBtnTextActive,
+              ]}
+            >
+              Upcoming ({safeUpcoming.length})
             </Text>
           </Pressable>
-        ))
-      )}
 
-      <View style={styles.revHeader}>
-        <Text style={styles.section}>Reviews</Text>
-        <Text style={styles.count}>
-          {receivedReviews.length} reviews
-        </Text>
-      </View>
-      {receivedReviews.length === 0 ? (
-        <Text style={styles.emptyHint}>
-          Reviews on events you host will appear here.
-        </Text>
-      ) : (
-        receivedReviews.map((r) => (
-          <View key={r.id} style={styles.review}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-              }}
+          <Pressable
+            onPress={() => setActiveEventTab('hosted')}
+            style={[styles.tabBtn, activeEventTab === 'hosted' && styles.tabBtnActive]}
+          >
+            <Text
+              style={[
+                styles.tabBtnText,
+                activeEventTab === 'hosted' && styles.tabBtnTextActive,
+              ]}
             >
-              <Text style={{ fontWeight: '700', color: colors.text }}>
-                {r.author}
-              </Text>
-              <Stars rating={r.rating} size={14} />
-            </View>
-            {!!r.eventTitle && (
-              <Text style={styles.reviewEvent}>{r.eventTitle}</Text>
-            )}
-            {!!r.content && (
-              <Text style={{ color: colors.text, marginTop: 4 }}>
-                {r.content}
-              </Text>
-            )}
-          </View>
-        ))
-      )}
+              Hosted ({safeHosted.length})
+            </Text>
+          </Pressable>
 
-      <Pressable
-        style={styles.settings}
-        onPress={() => navigation.navigate('Settings')}
-        accessibilityRole="button"
-      >
-        <Ionicons name="settings-outline" size={20} color={colors.text} />
-        <Text style={styles.settingsText}>Settings</Text>
-        <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-      </Pressable>
+          <Pressable
+            onPress={() => setActiveEventTab('past')}
+            style={[styles.tabBtn, activeEventTab === 'past' && styles.tabBtnActive]}
+          >
+            <Text
+              style={[
+                styles.tabBtnText,
+                activeEventTab === 'past' && styles.tabBtnTextActive,
+              ]}
+            >
+              Past ({safePast.length})
+            </Text>
+          </Pressable>
+        </View>
+
+        <EventsCardList
+          events={currentTabEvents}
+          type={activeEventTab}
+          onSelect={(id) => navigation.navigate('EventDetail', { id })}
+        />
+      </View>
+
+      {/* 7. Badges */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Badges</Text>
+          <Text style={styles.badgeText}>
+            {safeBadges.filter((b) => b.earned).length}/{safeBadges.length}
+          </Text>
+        </View>
+        <BadgesGrid badges={safeBadges} />
+      </View>
+
+      {/* 8. Host Reviews */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Host Reviews</Text>
+          <Text style={styles.badgeText}>{safeReviews.length}</Text>
+        </View>
+        <ReviewsList reviews={safeReviews} />
+      </View>
     </ScrollView>
   );
 }
 
-function Stat({ value, label }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  top: { flexDirection: 'row', alignItems: 'center' },
-  avatarWrap: { position: 'relative' },
-  cameraBadge: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.green,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.bg,
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg || '#F8FAF9',
   },
-  name: { fontSize: 20, fontWeight: '800', color: colors.text },
-  bio: { color: colors.muted, marginTop: 2 },
-  since: { color: colors.muted, fontSize: 12, marginTop: 4 },
-  edit: {
+  content: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  card: {
     backgroundColor: '#fff',
-    borderRadius: radii.pill,
-    padding: 8,
-    marginBottom: 6,
+    borderRadius: radii.md || 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border || '#E5E7EB',
+    padding: 16,
+    marginBottom: 12,
   },
-  section: {
-    fontWeight: '700',
-    fontSize: 16,
-    color: colors.text,
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  wrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  emptyHint: { color: colors.muted, fontSize: 13 },
-  stats: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 14,
-  },
-  stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 24, fontWeight: '800', color: colors.green },
-  statLabel: { color: colors.muted, fontSize: 13 },
-  badges: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
-  badge: {
-    width: '31%',
-    margin: '1%',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 10,
-    alignItems: 'center',
-  },
-  badgeName: {
-    fontWeight: '700',
-    fontSize: 12,
-    color: colors.text,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  badgeHint: { fontSize: 11, color: colors.muted, textAlign: 'center' },
-  attended: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  attendedText: { marginLeft: 8, color: colors.text, flex: 1 },
-  revHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
-  },
-  count: { color: colors.muted, fontSize: 13 },
-  review: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  reviewEvent: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  settings: {
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: radii.pill,
-    padding: 14,
-    marginTop: 20,
-    marginBottom: 20,
+    marginBottom: 10,
   },
-  settingsText: {
-    flex: 1,
-    marginLeft: 10,
-    fontWeight: '600',
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.text,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.muted,
+  },
+  wrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: radii.sm || 8,
+    padding: 3,
+    marginBottom: 12,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    borderRadius: (radii.sm || 8) - 2,
+  },
+  tabBtnActive: {
+    backgroundColor: '#fff',
+  },
+  tabBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.muted,
+  },
+  tabBtnTextActive: {
+    color: colors.text,
+  },
+  emptyHint: {
+    color: colors.muted,
+    fontSize: 13,
+    marginTop: 4,
   },
 });

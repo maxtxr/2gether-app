@@ -1,55 +1,66 @@
+import React, { useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   Image,
+  Pressable,
 } from 'react-native';
-
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
 import { useApp, eventHasEnded } from '../context/AppContext';
-import { EventCard } from '../components';
-import { useState } from 'react'
-
+import { EventCard, Avatar, Stars } from '../components';
 
 export default function HomeScreen({ navigation }) {
-  const { user, events, reviews } = useApp();
+  const { user, events = [], reviews = {} } = useApp();
 
-  const interests = user?.interests || [];
-  const firstName = (user?.name || '').trim().split(/\s+/)[0];
+  const interests = Array.isArray(user?.interests) ? user.interests : [];
+  const firstName = (user?.name || '').trim().split(/\s+/)[0] || 'Friend';
 
   const upcoming = events.filter((e) => !eventHasEnded(e));
 
   const matchesInterests = (e) =>
     interests.some(
       (i) =>
-        e.sport === i ||
-        e.category === i ||
+        e.sport?.toLowerCase() === i.toLowerCase() ||
+        e.category?.toLowerCase() === i.toLowerCase() ||
         (e.title || '').toLowerCase().includes(i.toLowerCase())
     );
 
   const picked = upcoming.filter(matchesInterests);
   const rest = upcoming.filter((e) => !matchesInterests(e));
-
   const suggested = [...picked, ...rest].slice(0, 6);
 
-  // Mostrar 10 reviews de cada vez
+  // Pagination for reviews feed
   const [visibleReviewsCount, setVisibleReviewsCount] = useState(10);
 
   const allFeedReviews = Object.values(reviews || {})
     .flat()
+    .filter(Boolean)
     .sort(
       (a, b) =>
-        new Date(b.createdAt) - new Date(a.createdAt)
+        new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
     );
 
   const feedReviews = allFeedReviews.slice(0, visibleReviewsCount);
-
   const hasMoreReviews = visibleReviewsCount < allFeedReviews.length;
 
-  const open = (id) =>
-    navigation.navigate('EventDetail', { id });
+  const openEvent = (id) => {
+    if (id) navigation.navigate('EventDetail', { id });
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    try {
+      return new Date(dateString).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+      });
+    } catch {
+      return '';
+    }
+  };
 
   return (
     <ScrollView
@@ -57,204 +68,188 @@ export default function HomeScreen({ navigation }) {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Welcome */}
+      {/* 1. Welcoming Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>
-            Hi, {firstName} 👋
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Discover what's happening around you.
-          </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.greeting}>Hey, {firstName} 👋</Text>
+          <Text style={styles.subtitle}>Ready for your next activity?</Text>
         </View>
 
-        <View style={styles.headerIcon}>
-          <Ionicons name="sparkles" size={22} color="#fff" />
-        </View>
+        <Pressable
+          onPress={() => navigation.navigate('Tabs', { screen: 'Profile' })}
+          style={styles.headerAvatarWrap}
+          accessibilityRole="button"
+          accessibilityLabel="Go to profile"
+        >
+          <Avatar source={user?.avatarUrl} name={user?.name} size={42} />
+        </Pressable>
       </View>
 
-      {/* Suggested events */}
+      {/* 2. Suggested Events */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          Suggested events
-        </Text>
+        <View>
+          <Text style={styles.sectionTitle}>Suggested Events</Text>
+          <Text style={styles.sectionSubtitle}>
+            {interests.length > 0 ? 'Based on your sports & preferences' : 'Popular in your area'}
+          </Text>
+        </View>
 
-        <Text style={styles.seeAll}>
-          For you
-        </Text>
+        <Pressable
+          onPress={() => navigation.navigate('Tabs', { screen: 'Explore' })}
+          hitSlop={8}
+          accessibilityRole="button"
+        >
+          <Text style={styles.seeAll}>See all</Text>
+        </Pressable>
       </View>
 
       {suggested.length > 0 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.eventsList}
+          contentContainerStyle={styles.eventsScrollList}
         >
           {suggested.map((event) => (
-            <View key={event.id} style={styles.eventCard}>
-              <EventCard
-                event={event}
-                onPress={() => open(event.id)}
-              />
+            <View key={event.id} style={styles.eventCardWrapper}>
+              <EventCard event={event} onPress={() => openEvent(event.id)} />
             </View>
           ))}
         </ScrollView>
       ) : (
-        <View style={styles.emptyEvents}>
-          <Ionicons
-            name="calendar-outline"
-            size={24}
-            color={colors.muted}
-          />
-
+        <View style={styles.emptyCard}>
+          <Ionicons name="calendar-outline" size={26} color={colors.muted} />
+          <Text style={styles.emptyTitle}>No upcoming events</Text>
           <Text style={styles.emptyText}>
-            No upcoming events right now.
+            Check back later or be the first to create one!
           </Text>
         </View>
       )}
 
-      {/* Feed */}
+      {/* 3. Community Activity Feed */}
       <View style={styles.feedHeader}>
         <View>
-          <Text style={styles.sectionTitle}>
-            Feed
-          </Text>
-
-          <Text style={styles.feedSubtitle}>
-            See what people are sharing.
+          <Text style={styles.sectionTitle}>Community Feed</Text>
+          <Text style={styles.sectionSubtitle}>
+            Real experiences, ratings, and moments
           </Text>
         </View>
-
-        <Ionicons
-          name="newspaper-outline"
-          size={23}
-          color={colors.green}
-        />
       </View>
 
-      {/* Reviews */}
-    {feedReviews.length > 0 ? (
-      <>
-        <View style={styles.reviewsList}>
-          {feedReviews.map((review) => (
-            <View key={review.id} style={styles.reviewCard}>
-
-              {/* Author */}
-              <View style={styles.reviewHeader}>
-                <View style={styles.avatar}>
-                  <Ionicons
-                    name="person"
-                    size={20}
-                    color={colors.green}
-                  />
-                </View>
-
-                <View style={styles.authorInfo}>
-                  <Text style={styles.authorName}>
-                    {review.author}
-                  </Text>
-
-                  <Text style={styles.eventName}>
-                    {review.eventTitle}
-                  </Text>
-                </View>
-
-                <View style={styles.rating}>
-                  <Ionicons
-                    name="star"
-                    size={14}
-                    color="#F5B942"
+      {feedReviews.length > 0 ? (
+        <>
+          <View style={styles.reviewsList}>
+            {feedReviews.map((review) => (
+              <View key={review.id} style={styles.reviewCard}>
+                {/* Reviewer Header */}
+                <View style={styles.reviewHeader}>
+                  <Avatar
+                    source={review.authorAvatar}
+                    name={review.author || 'Member'}
+                    size={40}
                   />
 
-                  <Text style={styles.ratingText}>
-                    {review.rating}/5
-                  </Text>
+                  <View style={styles.authorMeta}>
+                    <Text style={styles.authorName} numberOfLines={1}>
+                      {review.author || 'Anonymous'}
+                    </Text>
+                    {review.eventTitle && (
+                      <Pressable
+                        onPress={() => openEvent(review.eventId)}
+                        hitSlop={4}
+                      >
+                        <Text style={styles.eventLink} numberOfLines={1}>
+                          attended <Text style={styles.eventLinkHighlight}>{review.eventTitle}</Text>
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {/* Natural Rating Stars (Component or inline stars) */}
+                  <View style={styles.ratingWrap}>
+                    <Stars rating={review.rating || 5} size={13} />
+                  </View>
                 </View>
-              </View>
 
-              {/* Review text */}
-              <Text style={styles.reviewContent}>
-                {review.content}
-              </Text>
+                {/* Review Content */}
+                {!!review.content && (
+                  <Text style={styles.reviewContent}>{review.content}</Text>
+                )}
 
-              {/* Review image */}
-              {review.imageUrl && (
-                <Image
-                  source={{ uri: review.imageUrl }}
-                  style={styles.reviewImage}
-                  resizeMode="cover"
-                />
-              )}
+                {/* Optional Attached Picture */}
+                {review.imageUrl && (
+                  <Image
+                    source={{ uri: review.imageUrl }}
+                    style={styles.reviewImage}
+                    resizeMode="cover"
+                  />
+                )}
 
-              {/* Date */}
-              <View style={styles.reviewFooter}>
-                <Ionicons
-                  name="time-outline"
-                  size={14}
-                  color={colors.muted}
-                />
+                {/* Footer Meta */}
+                <View style={styles.reviewFooter}>
+                  <Text style={styles.reviewDate}>
+                    {formatDate(review.createdAt)}
+                  </Text>
 
-                <Text style={styles.reviewDate}>
-                  {new Date(review.createdAt).toLocaleDateString(
-                    'en-GB',
-                    {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    }
+                  {review.eventId && (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.viewEventBtn,
+                        pressed && { opacity: 0.7 },
+                      ]}
+                      onPress={() => openEvent(review.eventId)}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.viewEventText}>View event</Text>
+                      <Ionicons
+                        name="arrow-forward"
+                        size={12}
+                        color={colors.green || '#16A34A'}
+                      />
+                    </Pressable>
                   )}
-                </Text>
-
-                <Text
-                  style={styles.viewEvent}
-                  onPress={() => open(review.eventId)}
-                >
-                  View event
-                </Text>
+                </View>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
 
-        {/* Load more / End of feed */}
-        <View style={styles.loadMoreContainer}>
-          {hasMoreReviews ? (
-            <Text
-              style={styles.loadMoreText}
-              onPress={() =>
-                setVisibleReviewsCount((current) => current + 10)
-              }
-            >
-              Load more
-            </Text>
-          ) : (
-            <Text style={styles.endFeedText}>
-              You've reached the end of the feed.
-            </Text>
-          )}
-        </View>
-      </>
-    ) : (
-      <View style={styles.emptyFeed}>
-        <View style={styles.emptyFeedIcon}>
+          {/* Load More / End Of Feed */}
+          <View style={styles.loadMoreContainer}>
+            {hasMoreReviews ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.loadMoreBtn,
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => setVisibleReviewsCount((curr) => curr + 10)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.loadMoreText}>Show older stories</Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={15}
+                  color={colors.green || '#16A34A'}
+                />
+              </Pressable>
+            ) : (
+              <Text style={styles.endFeedText}>
+                You're all caught up with the community!
+              </Text>
+            )}
+          </View>
+        </>
+      ) : (
+        <View style={styles.emptyCard}>
           <Ionicons
-            name="images-outline"
-            size={30}
-            color={colors.green}
+            name="chatbubbles-outline"
+            size={28}
+            color={colors.muted}
           />
+          <Text style={styles.emptyTitle}>No stories yet</Text>
+          <Text style={styles.emptyText}>
+            Reviews and photos from completed events will appear here.
+          </Text>
         </View>
-
-        <Text style={styles.emptyFeedTitle}>
-          Nothing to see yet
-        </Text>
-
-        <Text style={styles.emptyFeedText}>
-          Reviews and photos from events will appear here.
-          Join an event and share your experience!
-        </Text>
-      </View>
-    )}
+      )}
     </ScrollView>
   );
 }
@@ -262,245 +257,192 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.bg || '#F8FAF9',
   },
-
   content: {
     paddingTop: 16,
-    paddingBottom: 30,
+    paddingBottom: 40,
   },
-
   header: {
     marginHorizontal: 16,
-    marginBottom: 22,
+    marginBottom: 20,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-
   greeting: {
     color: colors.text,
-    fontSize: 23,
+    fontSize: 22,
     fontWeight: '800',
+    letterSpacing: -0.3,
   },
-
   subtitle: {
     color: colors.muted,
     fontSize: 13,
-    marginTop: 4,
+    marginTop: 2,
   },
-
-  headerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.green,
-    alignItems: 'center',
-    justifyContent: 'center',
+  headerAvatarWrap: {
+    padding: 2,
   },
-
   sectionHeader: {
     marginHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 12,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
   },
-
   sectionTitle: {
     color: colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-
-  seeAll: {
-    color: colors.green,
-    fontSize: 12,
+    fontSize: 17,
     fontWeight: '700',
+    letterSpacing: -0.2,
   },
-
-  eventsList: {
+  sectionSubtitle: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  seeAll: {
+    color: colors.green || '#16A34A',
+    fontSize: 13,
+    fontWeight: '600',
+    paddingBottom: 2,
+  },
+  eventsScrollList: {
     paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 4,
+    paddingBottom: 6,
     gap: 12,
   },
-
-  eventCard: {
-    width: 275,
+  eventCardWrapper: {
+    width: 280,
   },
-
-  emptyEvents: {
+  emptyCard: {
     marginHorizontal: 16,
-    padding: 20,
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
+    backgroundColor: '#fff',
+    borderRadius: radii.md || 16,
+    borderWidth: 1,
+    borderColor: colors.border || '#E5E7EB',
+    padding: 24,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 16,
   },
-
+  emptyTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 2,
+  },
   emptyText: {
     color: colors.muted,
-    fontSize: 13,
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 240,
   },
-
   feedHeader: {
     marginHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 12,
   },
-
-  feedSubtitle: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 3,
-  },
-
   reviewsList: {
     marginHorizontal: 16,
-    gap: 14,
+    gap: 12,
   },
-
   reviewCard: {
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
+    backgroundColor: '#fff',
+    borderRadius: radii.md || 16,
+    borderWidth: 1,
+    borderColor: colors.border || '#E5E7EB',
     padding: 16,
   },
-
   reviewHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
   },
-
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  authorInfo: {
+  authorMeta: {
     flex: 1,
     marginLeft: 10,
+    justifyContent: 'center',
   },
-
   authorName: {
     color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
-
-  eventName: {
+  eventLink: {
     color: colors.muted,
     fontSize: 12,
-    marginTop: 3,
+    marginTop: 1,
   },
-
-  rating: {
+  eventLinkHighlight: {
+    color: colors.text,
+    fontWeight: '600',
+  },
+  ratingWrap: {
+    alignItems: 'flex-end',
+  },
+  reviewContent: {
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  reviewImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: radii.sm || 10,
+    marginBottom: 10,
+    backgroundColor: '#F3F4F6',
+  },
+  reviewFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border || '#F3F4F6',
+  },
+  reviewDate: {
+    color: colors.muted,
+    fontSize: 12,
+  },
+  viewEventBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-
-  ratingText: {
-    color: colors.text,
+  viewEventText: {
+    color: colors.green || '#16A34A',
     fontSize: 12,
     fontWeight: '700',
   },
-
-  reviewContent: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 12,
+  loadMoreContainer: {
+    marginTop: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  reviewImage: {
-    width: '100%',
-    height: 220,
-    borderRadius: radii.md,
-    marginBottom: 12,
-    backgroundColor: colors.bg,
-  },
-
-  reviewFooter: {
+  loadMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 4,
+    backgroundColor: '#fff',
+    borderRadius: radii.pill || 999,
+    borderWidth: 1,
+    borderColor: colors.border || '#E5E7EB',
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    gap: 6,
   },
-
-  reviewDate: {
-    color: colors.muted,
-    fontSize: 11,
-    flex: 1,
-  },
-
-  viewEvent: {
-    color: colors.green,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  emptyFeed: {
-    marginHorizontal: 16,
-    minHeight: 220,
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-
-  emptyFeedIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-
-  emptyFeedTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 7,
-  },
-
-  emptyFeedText: {
-    color: colors.muted,
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-
-  loadMoreContainer: {
-    marginHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 10,
-    alignItems: 'center',
-  },
-
   loadMoreText: {
-    color: colors.green,
-    fontSize: 14,
+    color: colors.green || '#16A34A',
+    fontSize: 13,
     fontWeight: '700',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
   },
-
   endFeedText: {
     color: colors.muted,
-    fontSize: 13,
-    textAlign: 'center',
-    paddingVertical: 12,
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });

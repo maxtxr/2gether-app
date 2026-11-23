@@ -1,4 +1,3 @@
-
 import { View, Alert, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -19,6 +18,7 @@ import CreateEventScreen from './src/screens/CreateEventScreen';
 import ReviewScreen from './src/screens/ReviewScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import EventChatsScreen from './src/screens/EventChatsScreen';
+import EditProfileScreen from './src/screens/EditProfileScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -93,6 +93,11 @@ function Root() {
             name="Settings"
             component={SettingsScreen}
             options={{ title: 'Settings' }}
+          />
+          <Stack.Screen 
+            name="EditProfile" 
+            component={EditProfileScreen} 
+            options={{ title: 'Edit Profile' }}
           />
         </Stack.Navigator>
       ) : (

@@ -15,7 +15,6 @@ export default function EventCard({ event, onPress, right }) {
     (category) => category.name === event.category
   )?.icon;
 
-  // Inscrição rápida pelo "+": pergunta primeiro, depois mostra o resultado
   const [confirmJoin, setConfirmJoin] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -50,8 +49,8 @@ export default function EventCard({ event, onPress, right }) {
         <View style={styles.categoryIconBox}>
           <MaterialCommunityIcons
             name={event.icon || categoryIcon || 'calendar-star'}
-            size={24}
-            color={colors.green}
+            size={22}
+            color={colors.green || '#16A34A'}
           />
         </View>
 
@@ -63,22 +62,28 @@ export default function EventCard({ event, onPress, right }) {
 
           <View style={styles.metaRow}>
             <Ionicons name="calendar-outline" size={13} color={colors.muted} />
-            <Text style={styles.metaText}>{event.short || event.date}</Text>
+            <Text style={styles.metaText}>{event.short || event.date || event.when}</Text>
           </View>
 
           <View style={styles.metaRow}>
             <Ionicons name="location-outline" size={13} color={colors.muted} />
-            <Text style={styles.metaText} numberOfLines={1}>{event.area || event.place}</Text>
-            <Text style={styles.bullet}>•</Text>
-            <View style={styles.levelTag}>
-              <Text style={styles.levelText}>{event.level || 'All levels'}</Text>
-            </View>
+            <Text style={styles.metaText} numberOfLines={1}>
+              {event.area || event.place || 'TBD'}
+            </Text>
+            {!!event.level && (
+              <>
+                <Text style={styles.bullet}>•</Text>
+                <View style={styles.levelTag}>
+                  <Text style={styles.levelText}>{event.level}</Text>
+                </View>
+              </>
+            )}
           </View>
 
           {/* Accessibility Tag if present */}
           {event.accessibilityTag && (
             <View style={styles.accessibilityRow}>
-              <Ionicons name="accessibility-outline" size={12} color={colors.green} />
+              <Ionicons name="accessibility-outline" size={12} color={colors.green || '#16A34A'} />
               <Text style={styles.accessibilityText}>{event.accessibilityTag}</Text>
             </View>
           )}
@@ -135,17 +140,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm + 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.md || 16,
+    padding: spacing.md || 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border || '#E5E7EB',
   },
   main: {
     flex: 1,
@@ -153,17 +153,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardPressed: {
-    opacity: 0.95,
-    transform: [{ scale: 0.995 }],
+    opacity: 0.65,
   },
   categoryIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
-    backgroundColor: colors.chip,
+    width: 44,
+    height: 44,
+    borderRadius: radii.sm || 10,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: 12,
   },
   content: {
     flex: 1,
@@ -172,12 +173,12 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 3,
   },
   title: {
     fontWeight: '700',
     color: colors.text,
-    fontSize: 15,
+    fontSize: 14.5,
   },
   metaRow: {
     flexDirection: 'row',
@@ -187,23 +188,23 @@ const styles = StyleSheet.create({
   metaText: {
     color: colors.muted,
     fontSize: 12,
-    marginLeft: spacing.xs,
+    marginLeft: 4,
     flexShrink: 1,
   },
   bullet: {
     color: colors.muted,
-    marginHorizontal: 4,
+    marginHorizontal: 5,
     fontSize: 10,
   },
   levelTag: {
-    backgroundColor: '#EDF2F7',
+    backgroundColor: '#F3F4F6',
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
   },
   levelText: {
-    fontSize: 11,
-    color: colors.primary,
+    fontSize: 10.5,
+    color: colors.muted,
     fontWeight: '600',
   },
   accessibilityRow: {
@@ -214,39 +215,39 @@ const styles = StyleSheet.create({
   },
   accessibilityText: {
     fontSize: 11,
-    color: colors.green,
+    color: colors.green || '#16A34A',
     fontWeight: '600',
   },
   actionContainer: {
-    marginLeft: spacing.sm,
+    marginLeft: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 58,
+    minWidth: 54,
   },
   joinButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.orange,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.orange || '#F97316',
     alignItems: 'center',
     justifyContent: 'center',
   },
   joinButtonPressed: {
-    opacity: 0.8,
+    opacity: 0.75,
   },
   badge: {
-    minWidth: 58,
-    height: 32,
-    borderRadius: radii.pill,
+    minWidth: 56,
+    height: 28,
+    borderRadius: radii.pill || 999,
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeGoing: {
-    backgroundColor: colors.green,
+    backgroundColor: colors.green || '#16A34A',
   },
   badgeHosting: {
-    backgroundColor: colors.orange,
+    backgroundColor: colors.orange || '#F97316',
   },
   badgeText: {
     color: '#FFFFFF',
