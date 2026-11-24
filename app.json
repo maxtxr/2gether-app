@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "2gether",
@@ -7,7 +8,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ipmgroupone.twogether",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -15,7 +20,8 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.ipmgroupone.twogether"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -24,7 +30,21 @@
       "expo-status-bar",
       "expo-font",
       "expo-sqlite",
-      "@react-native-community/datetimepicker"
-    ]
+      "@react-native-community/datetimepicker",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep class * extends androidx.work.InputMerger { <init>(); }"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "65ed9f5f-5ba7-4e2d-ba02-dcced678a5d4"
+      }
+    }
   }
 }
+
