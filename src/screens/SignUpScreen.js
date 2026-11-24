@@ -8,7 +8,6 @@ import {
   ScrollView,
   Platform,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../theme';
@@ -17,7 +16,7 @@ import { useApp } from '../context/AppContext';
 import { isValidEmail, isStrongPassword, PASSWORD_RULES } from '../utils/validation';
 
 export default function SignUpScreen({ navigation }) {
-  const { signUp } = useApp();
+  const { signUp, showFeedback } = useApp();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -54,19 +53,26 @@ export default function SignUpScreen({ navigation }) {
 
       await signUp(trimmedName, trimmedEmail, password);
 
-      Alert.alert(
-        'Account created!',
-        'Your account was created successfully. Please log in.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Login'),
-          },
-        ]
-      );
+      showFeedback({
+        title: 'Account created!',
+        message: 'Your account was created successfully. Please log in.',
+        variant: 'success',
+        confirmText: 'Log in',
+        onConfirm: () => navigation.navigate('Login'),
+      });
     } catch (err) {
       console.error('Signup error:', err);
-      setError(err.message || 'Could not create account. Please try again.');
+
+      const raw = err?.message || '';
+      const alreadyRegistered = /already registered|already exists/i.test(raw);
+
+      showFeedback({
+        title: alreadyRegistered ? 'Account already exists' : 'Could not create account',
+        message: alreadyRegistered
+          ? 'An account with this email already exists. Try logging in instead.'
+          : raw || 'Could not create account. Please try again.',
+        variant: alreadyRegistered ? 'warning' : 'danger',
+      });
     } finally {
       setIsSubmitting(false);
     }

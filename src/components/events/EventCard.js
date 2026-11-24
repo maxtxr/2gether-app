@@ -96,7 +96,9 @@ export default function EventCard({ event, onPress, right }) {
           right
         ) : hosting ? (
           <View style={[styles.badge, styles.badgeHosting]}>
-            <Text style={styles.badgeText}>{eventHasEnded(event) ? 'Hosted' : 'Hosting'}</Text>
+            <Text style={[styles.badgeText, styles.badgeTextHosting]}>
+              {eventHasEnded(event) ? 'Hosted' : 'Hosting'}
+            </Text>
           </View>
         ) : going ? (
           <View style={[styles.badge, styles.badgeGoing]}>
@@ -119,6 +121,7 @@ export default function EventCard({ event, onPress, right }) {
         visible={confirmJoin}
         title={`Join ${event.title}?`}
         message={[event.short || event.when, where].filter(Boolean).join('\n')}
+        variant="question"
         confirmText="Join"
         cancelText="Not now"
         onConfirm={quickJoin}
@@ -248,14 +251,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeGoing: {
-    backgroundColor: colors.green || '#16A34A',
+    backgroundColor: '#E8F3EE',
   },
   badgeHosting: {
-    backgroundColor: colors.orange || '#F97316',
+    backgroundColor: '#FCE8D8',
   },
   badgeText: {
-    color: '#FFFFFF',
+    color: colors.green,
     fontWeight: '700',
     fontSize: 11,
+  },
+  badgeTextHosting: {
+    color: colors.orange,
   },
 });

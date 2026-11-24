@@ -6,7 +6,6 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
@@ -15,7 +14,7 @@ import { Avatar } from '../components';
 import { supabase } from '../../lib/supabase';
 
 export default function EventChatsScreen({ route, navigation }) {
-  const { events, user, loadEventConversations } = useApp();
+  const { events, user, loadEventConversations, showFeedback } = useApp();
 
   const { eventId } = route.params;
 
@@ -35,7 +34,11 @@ export default function EventChatsScreen({ route, navigation }) {
           setConversations(data);
         }
       } catch (error) {
-        Alert.alert('Error loading chats', error.message);
+        showFeedback({
+          title: 'Error loading chats',
+          message: error.message,
+          variant: 'danger',
+        });
       } finally {
         if (mounted) {
           setLoading(false);
@@ -166,7 +169,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.green,
+    color: colors.text,
   },
   subtitle: {
     color: colors.muted,

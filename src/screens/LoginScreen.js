@@ -15,38 +15,54 @@ import { Logo, Button } from '../components';
 import { useApp } from '../context/AppContext';
 
 export default function LoginScreen({ navigation }) {
-  const { login } = useApp();
+  const { login, showFeedback } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [note, setNote] = useState('');
 
   const passwordInputRef = useRef(null);
+
+  const showLoginError = (message, isCredentialError = false) => {
+    showFeedback({
+      title: isCredentialError ? 'Account not found' : 'Could not sign in',
+      message,
+      variant: isCredentialError ? 'warning' : 'danger',
+    });
+  };
 
 const handleLogin = async () => {
   const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
-      setError('Please enter your email and password.');
+      showLoginError('Please enter your email and password.');
       return;
     }
 
     // Basic format validation
     const emailRegex = /\S+@\S+\.\S+/;
     if (!emailRegex.test(trimmedEmail)) {
-      setError('Please enter a valid email address (e.g. name@example.com).');
+      showLoginError('Please enter a valid email address (e.g. name@example.com).');
       return;
     }
-
-    setError('');
 
     try {
       setIsSubmitting(true);
       await login(trimmedEmail, password);
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.message || 'Unable to sign in. Please try again.');
+
+      const raw = err?.message || '';
+      const credentialsProblem = /invalid login credentials/i.test(raw);
+      const emailNotConfirmed = /email not confirmed/i.test(raw);
+
+      showLoginError(
+        credentialsProblem
+          ? "We couldn't find an account with that email and password. Check your details or create a new account."
+          : emailNotConfirmed
+            ? 'Please confirm your email address before signing in.'
+            : raw || 'Unable to sign in. Please try again.',
+        credentialsProblem
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -77,7 +93,7 @@ const handleLogin = async () => {
             <TextInput
               style={styles.input}
               value={email}
-              onChangeText={(v) => { setEmail(v); setError(''); }}
+              onChangeText={setEmail}
               placeholder="Enter your email"
               placeholderTextColor="#8A938D"
               autoCapitalize="none"
@@ -95,7 +111,7 @@ const handleLogin = async () => {
               ref={passwordInputRef}
               style={[styles.input, styles.passwordInput]}
               value={password}
-              onChangeText={(v) => { setPassword(v); setError(''); }}
+              onChangeText={setPassword}
               placeholder="Enter your password"
               placeholderTextColor="#8A938D"
               secureTextEntry={!showPassword}
@@ -120,16 +136,19 @@ const handleLogin = async () => {
           </View>
 
           <Pressable
-            onPress={() => setNote('A reset link will be sent to your email.')}
+            onPress={() =>
+              showFeedback({
+                title: 'Password reset',
+                message: 'A reset link will be sent to your email.',
+                variant: 'info',
+              })
+            }
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Forgot password button"
           >
             <Text style={styles.forgot}>Forgot password?</Text>
           </Pressable>
-
-          {note ? <Text style={styles.note}>{note}</Text> : null}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Button
             title="Login"

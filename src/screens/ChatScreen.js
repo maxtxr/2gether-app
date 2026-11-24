@@ -10,7 +10,6 @@ import {
   Keyboard,
   Platform,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +20,7 @@ import { Avatar } from '../components';
 import { supabase } from '../../lib/supabase';
 
 export default function ChatScreen({ route, navigation }) {
-  const { events, chats, loadMessages, markConversationRead, sendMessage } = useApp();
+  const { events, chats, loadMessages, markConversationRead, sendMessage, showFeedback } = useApp();
 
   const { conversationId, eventId, otherName } = route.params;
 
@@ -118,7 +117,11 @@ export default function ChatScreen({ route, navigation }) {
 
       setText('');
     } catch (error) {
-      Alert.alert('Error sending message', error.message);
+      showFeedback({
+        title: 'Error sending message',
+        message: error.message,
+        variant: 'danger',
+      });
     } finally {
       setSending(false);
     }

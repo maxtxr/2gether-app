@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
@@ -39,6 +39,7 @@ export default function NotificationsScreen({ navigation }) {
     clearNotifications,
     events,
     user,
+    showFeedback,
   } = useApp();
 
   const [confirmClear, setConfirmClear] = useState(false);
@@ -141,7 +142,11 @@ export default function NotificationsScreen({ navigation }) {
                       });
                     }
                   } catch (error) {
-                    Alert.alert('Notification error', error.message);
+                    showFeedback({
+                      title: 'Notification error',
+                      message: error.message,
+                      variant: 'danger',
+                    });
                   }
                 }}
                 accessibilityRole="button"
@@ -200,7 +205,11 @@ export default function NotificationsScreen({ navigation }) {
           try {
             await clearNotifications();
           } catch (error) {
-            Alert.alert('Could not clear notifications', error.message);
+            showFeedback({
+              title: 'Could not clear notifications',
+              message: error.message,
+              variant: 'danger',
+            });
           }
         }}
         onCancel={() => setConfirmClear(false)}
@@ -217,7 +226,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.green,
+    color: colors.text,
   },
   row: {
     flexDirection: 'row',

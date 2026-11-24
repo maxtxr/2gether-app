@@ -4,16 +4,50 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme';
 import Button from './Button';
 
+// Different feedback moments need different signals:
+// - success  → something worked (check)
+// - danger   → something failed (alert)
+// - info     → neutral explanation (i)
+// - question → asking for confirmation (no checkmark!)
+const VARIANTS = {
+  success: {
+    icon: 'checkmark-circle',
+    color: colors.green,
+  },
+  danger: {
+    icon: 'alert-circle',
+    color: colors.danger,
+  },
+  warning: {
+    icon: 'alert-circle',
+    color: colors.orange,
+  },
+  info: {
+    icon: 'information-circle',
+    color: colors.greenLight,
+  },
+  question: {
+    icon: 'help-circle',
+    color: colors.orange,
+  },
+};
+
 export default function ConfirmModal({
   visible,
   title = 'Done',
   message,
   confirmText = 'OK',
   cancelText,
-  variant = 'success', // 'success' | 'danger'
+  variant = 'success', // 'success' | 'danger' | 'warning' | 'info' | 'question'
+  confirmVariant,
   onConfirm,
   onCancel,
+  children,
 }) {
+  const look = VARIANTS[variant] || VARIANTS.success;
+  const actionVariant =
+    confirmVariant || (variant === 'danger' ? 'danger' : 'primary');
+
   return (
     <Modal
       transparent
@@ -22,22 +56,23 @@ export default function ConfirmModal({
       onRequestClose={onCancel || onConfirm}
     >
       <Pressable style={styles.backdrop} onPress={onCancel || onConfirm}>
-        <Pressable style={styles.box} onPress={(e) => e.stopPropagation()}>
-          <View style={[styles.iconCircle, variant === 'danger' && styles.iconDanger]}>
-            <Ionicons
-              name={variant === 'danger' ? 'alert-circle' : 'checkmark-circle'}
-              size={44}
-              color={variant === 'danger' ? colors.danger : colors.green}
-            />
+        <Pressable
+          style={styles.box}
+          onPress={(e) => e.stopPropagation()}
+          accessibilityViewIsModal
+        >
+          <View style={styles.iconCircle}>
+            <Ionicons name={look.icon} size={44} color={look.color} />
           </View>
 
-          <Text style={styles.title}>{title}</Text>
-          {message ? <Text style={styles.message}>{message}</Text> : null}
+          {!!title && <Text style={styles.title}>{title}</Text>}
+          {!!message ? <Text style={styles.message}>{message}</Text> : null}
+          {children}
 
           <View style={styles.buttonStack}>
             <Button
               title={confirmText}
-              variant={variant === 'danger' ? 'danger' : 'primary'}
+              variant={actionVariant}
               onPress={onConfirm}
               style={styles.actionBtn}
             />
@@ -79,9 +114,6 @@ const styles = StyleSheet.create({
   },
   iconCircle: {
     marginBottom: spacing.sm,
-  },
-  iconDanger: {
-    tintColor: colors.danger,
   },
   title: {
     fontSize: 18,

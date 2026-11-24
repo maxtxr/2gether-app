@@ -5,7 +5,6 @@ import {
   TextInput,
   ScrollView,
   StyleSheet,
-  Alert,
   Pressable,
   Platform,
   Modal,
@@ -33,7 +32,36 @@ import EventCard from '../components/events/EventCard';
 const areaFromPhoton = (properties = {}) =>
   properties.city || properties.district || properties.county || properties.state || '';
 
-// Descobre a zona e as coordenadas de um local com o Photon (OpenStreetMap)
+// Nome curto e legível de um resultado do Photon
+const placeFromPhoton = (properties = {}) =>
+  properties.name ||
+  properties.street ||
+  properties.city ||
+  properties.district ||
+  properties.county ||
+  '';
+
+// Endereço completo a partir de um resultado do Photon
+const addressFromPhoton = (properties = {}) => {
+  const streetAddress = [properties.housenumber, properties.street]
+    .filter(Boolean)
+    .join(' ');
+
+  return [
+    properties.name,
+    streetAddress,
+    properties.postcode,
+    properties.city,
+    properties.state,
+    properties.country,
+  ]
+    .filter(Boolean)
+    .filter((part, index, list) => list.indexOf(part) === index)
+    .join(', ');
+};
+
+// Descobre o nome, a zona, o endereço e as coordenadas de um local
+// (pesquisa por texto ou reverse geocoding de um ponto no mapa).
 async function lookupLocation({ coordinate, query }) {
   if (!coordinate && (!query || query.length < 3)) return null;
 
@@ -49,9 +77,12 @@ async function lookupLocation({ coordinate, query }) {
   if (!feature) return null;
 
   const [lng, lat] = feature.geometry.coordinates;
+  const properties = feature.properties || {};
 
   return {
-    area: areaFromPhoton(feature.properties),
+    area: areaFromPhoton(properties),
+    place: placeFromPhoton(properties),
+    address: addressFromPhoton(properties),
     coordinate: {
       latitude: Number(lat),
       longitude: Number(lng),
@@ -60,7 +91,7 @@ async function lookupLocation({ coordinate, query }) {
 }
 
 export default function CreateEventScreen({ navigation, route }) {
-  const { createEvent, updateEvent } = useApp();
+  const { createEvent, updateEvent, showFeedback } = useApp();
 
   const eventToEdit = route?.params?.event;
   const isEditing = !!eventToEdit;
@@ -145,6 +176,7 @@ export default function CreateEventScreen({ navigation, route }) {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [isResolvingLocation, setIsResolvingLocation] = useState(false);
 
   useEffect(() => {
     if (!eventToEdit) return;
@@ -370,7 +402,7 @@ export default function CreateEventScreen({ navigation, route }) {
 
   // Select search result
   const selectSearchResult = (result) => {
-    const properties = result.properties;
+    const properties = result.properties || {};
     const coordinates = result.geometry.coordinates;
 
     const coordinate = {
@@ -384,26 +416,10 @@ export default function CreateEventScreen({ navigation, route }) {
       properties.city ||
       'Selected location';
 
-    const streetAddress = [
-      properties.housenumber,
-      properties.street,
-    ].filter(Boolean).join(' ');
-
-    const addressParts = [
-      properties.name,
-      streetAddress,
-      properties.postcode,
-      properties.city,
-      properties.state,
-      properties.country,
-    ].filter(Boolean);
-
-    const fullAddress = [...new Set(addressParts)].join(', ');
-
     selectedSearchQuery.current = locationName;
 
     setSelectedCoordinate(coordinate);
-    setSelectedAddress(fullAddress || locationName);
+    setSelectedAddress(addressFromPhoton(properties) || locationName);
     setSelectedArea(areaFromPhoton(properties));
     setPlace(locationName);
 
@@ -418,6 +434,61 @@ export default function CreateEventScreen({ navigation, route }) {
     setSearchError('');
   };
 
+  // Ao tocar no mapa, transformar o ponto numa localização legível. Sem isto
+  // o utilizador escolhia um pin mas continuava obrigado a escrever o local.
+  const handleMapPress = async (mapEvent) => {
+    const coordinate = mapEvent.nativeEvent.coordinate;
+    const coordinateLabel = `${coordinate.latitude.toFixed(4)}, ${coordinate.longitude.toFixed(4)}`;
+
+    setSelectedCoordinate(coordinate);
+    setSelectedAddress('');
+    setSelectedArea('');
+    setIsResolvingLocation(true);
+
+    try {
+      const found = await lookupLocation({ coordinate });
+
+      if (found) {
+        setSelectedAddress(found.address || '');
+        setSelectedArea(found.area || '');
+        setPlace(found.place || found.area || coordinateLabel);
+      } else {
+        setPlace(coordinateLabel);
+      }
+    } catch (error) {
+      console.warn('Could not reverse geocode the selected point:', error);
+      setPlace(coordinateLabel);
+    } finally {
+      setIsResolvingLocation(false);
+    }
+  };
+
+  const confirmMapSelection = async () => {
+    if (!selectedCoordinate) return;
+
+    // If the user tapped "Confirm" before the reverse lookup finished, do it
+    // now so the location field is always filled in.
+    if (!place.trim()) {
+      setIsResolvingLocation(true);
+
+      try {
+        const found = await lookupLocation({ coordinate: selectedCoordinate });
+
+        if (found) {
+          setSelectedAddress(found.address || '');
+          setSelectedArea(found.area || '');
+          setPlace(found.place || found.area || 'Map pin');
+        }
+      } catch (error) {
+        console.warn('Could not reverse geocode the selected point:', error);
+      } finally {
+        setIsResolvingLocation(false);
+      }
+    }
+
+    setShowMapPicker(false);
+  };
+
   // Publish event
   const submit = async () => {
     if (!ready || isSubmitting) return;
@@ -427,8 +498,9 @@ export default function CreateEventScreen({ navigation, route }) {
 
       let coordinate = selectedCoordinate;
       let area = selectedArea;
+      let address = selectedAddress;
 
-      if (!area || !coordinate) {
+      if (!area || !coordinate || !address) {
         try {
           const found = await lookupLocation({
             coordinate,
@@ -437,6 +509,7 @@ export default function CreateEventScreen({ navigation, route }) {
 
           if (found) {
             area = area || found.area;
+            address = address || found.address;
             coordinate = coordinate || found.coordinate;
           }
         } catch (lookupError) {
@@ -456,7 +529,7 @@ export default function CreateEventScreen({ navigation, route }) {
         description: description.trim(),
         when: `${formatDate(date)}, ${time.trim()}`,
         place: place.trim(),
-        address: selectedAddress || place.trim(),
+        address: address || place.trim(),
         area: area || null,
         lat: coordinate?.latitude ?? null,
         lng: coordinate?.longitude ?? null,
@@ -475,10 +548,11 @@ export default function CreateEventScreen({ navigation, route }) {
       setDone(true);
     } catch (error) {
       console.error('Error creating event:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Could not create the event. Please try again.'
-      );
+      showFeedback({
+        title: isEditing ? 'Could not save event' : 'Could not publish event',
+        message: error.message || 'Please try again.',
+        variant: 'danger',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -833,7 +907,8 @@ export default function CreateEventScreen({ navigation, route }) {
 
       {selectedCoordinate && (
         <Text style={styles.coordinateText}>
-          Location selected: {selectedCoordinate.latitude.toFixed(5)}, {selectedCoordinate.longitude.toFixed(5)}
+          Location selected: {place || 'Map pin'}
+          {selectedArea ? ` · ${selectedArea}` : ''}
         </Text>
       )}
 
@@ -1039,11 +1114,7 @@ export default function CreateEventScreen({ navigation, route }) {
               style={styles.map}
               region={mapRegion}
               onRegionChangeComplete={setMapRegion}
-              onPress={(event) => {
-                setSelectedCoordinate(event.nativeEvent.coordinate);
-                setSelectedAddress('');
-                setSelectedArea('');
-              }}
+              onPress={handleMapPress}
             >
               {selectedCoordinate && (
                 <Marker coordinate={selectedCoordinate} />
@@ -1052,21 +1123,27 @@ export default function CreateEventScreen({ navigation, route }) {
 
             <View style={styles.mapFooter}>
               <Text style={styles.coordinateText}>
-                {selectedCoordinate
-                  ? `${selectedCoordinate.latitude.toFixed(5)}, ${selectedCoordinate.longitude.toFixed(5)}`
-                  : 'Tap the map to select a location'}
+                {isResolvingLocation
+                  ? 'Finding the address…'
+                  : selectedCoordinate
+                    ? place
+                      ? `${place}${selectedArea ? ` · ${selectedArea}` : ''}`
+                      : `${selectedCoordinate.latitude.toFixed(5)}, ${selectedCoordinate.longitude.toFixed(5)}`
+                    : 'Tap the map to select a location'}
               </Text>
 
               <Pressable
                 style={[
                   styles.confirmMapButton,
-                  !selectedCoordinate && { opacity: 0.5 },
+                  (!selectedCoordinate || isResolvingLocation) && {
+                    opacity: 0.5,
+                  },
                 ]}
-                disabled={!selectedCoordinate}
-                onPress={() => setShowMapPicker(false)}
+                disabled={!selectedCoordinate || isResolvingLocation}
+                onPress={confirmMapSelection}
               >
                 <Text style={styles.confirmMapButtonText}>
-                  Confirm location
+                  {isResolvingLocation ? 'Finding address…' : 'Confirm location'}
                 </Text>
               </Pressable>
             </View>

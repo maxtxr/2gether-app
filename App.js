@@ -21,11 +21,12 @@ import EventChatsScreen from './src/screens/EventChatsScreen';
 import ChatsScreen from './src/screens/ChatsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
+import UserProfileScreen from './src/screens/UserProfileScreen';
+import LegalScreen from './src/screens/LegalScreen';
+import SplashScreen from './src/components/common/SplashScreen';
 
 const Stack = createNativeStackNavigator();
 
-// react-native-web ships a no-op Alert.alert, which makes validation and
-// confirmations look dead in the browser. Route them to the browser instead.
 if (Platform.OS === 'web' && typeof window !== 'undefined') {
   Alert.alert = (title, message, buttons) => {
     const text = message ? `${title}\n\n${message}` : title;
@@ -43,16 +44,11 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
 }
 
 function Root() {
-  // Obter o utilizador e o estado de carregamento do Supabase
   const { user, authLoading } = useApp();
 
-  // Esperar pela verificação da sessão antes de mostrar os ecrãs
+  // Show the animated branded splash screen while checking session credentials
   if (authLoading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.green }}>
-        <StatusBar style="light" />
-      </View>
-    );
+    return <SplashScreen />;
   }
 
   return (
@@ -106,10 +102,22 @@ function Root() {
             component={SettingsScreen}
             options={{ title: 'Settings' }}
           />
-          <Stack.Screen 
-            name="EditProfile" 
-            component={EditProfileScreen} 
+          <Stack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
             options={{ title: 'Edit Profile' }}
+          />
+          <Stack.Screen
+            name="UserProfile"
+            component={UserProfileScreen}
+            options={({ route }) => ({
+              title: route.params?.name || 'Profile',
+            })}
+          />
+          <Stack.Screen
+            name="Legal"
+            component={LegalScreen}
+            options={{ title: 'Legal Information' }}
           />
         </Stack.Navigator>
       ) : (
@@ -123,11 +131,11 @@ function Root() {
 }
 
 export default function App() {
-  // Preload the icon font up front
   const [fontsLoaded, fontError] = useFonts(Ionicons.font);
 
+  // Show splash screen while preloading icon fonts
   if (!fontsLoaded && !fontError) {
-    return <View style={{ flex: 1, backgroundColor: colors.green }} />;
+    return <SplashScreen />;
   }
 
   return (

@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -22,7 +21,7 @@ import { useApp } from '../context/AppContext';
 import { Avatar, Button, Chip } from '../components';
 
 export default function EditProfileScreen({ navigation }) {
-  const { user, updateProfile, uploadAvatar } = useApp();
+  const { user, updateProfile, uploadAvatar, showFeedback } = useApp();
 
   const [name, setName] = useState(user?.name || '');
   const [bio, setBio] = useState(user?.bio || '');
@@ -70,7 +69,11 @@ export default function EditProfileScreen({ navigation }) {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission required', 'Please allow access to your photo library.');
+        showFeedback({
+          title: 'Permission required',
+          message: 'Please allow access to your photo library in your device settings.',
+          variant: 'info',
+        });
         return;
       }
 
@@ -134,14 +137,28 @@ export default function EditProfileScreen({ navigation }) {
       }
 
       if (!compressedImage) {
-        Alert.alert('Image too large', 'Could not compress this image below 1 MB.');
+        showFeedback({
+          title: 'Image too large',
+          message: 'Could not compress this image below 1 MB. Please choose another one.',
+          variant: 'danger',
+        });
         return;
       }
 
       await uploadAvatar(compressedImage.uri);
+
+      showFeedback({
+        title: 'Photo updated',
+        message: 'Your new profile photo is now visible.',
+        variant: 'success',
+      });
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      Alert.alert('Error', error.message || 'Could not update profile photo.');
+      showFeedback({
+        title: 'Could not update profile photo',
+        message: error.message || 'Something went wrong. Please try again.',
+        variant: 'danger',
+      });
     } finally {
       setUploadingAvatar(false);
     }
@@ -156,9 +173,19 @@ export default function EditProfileScreen({ navigation }) {
         interests,
         accessibility,
       });
-      navigation.goBack();
+      showFeedback({
+        title: 'Profile updated',
+        message: 'Your changes have been saved.',
+        variant: 'success',
+        confirmText: 'Done',
+        onConfirm: () => navigation.goBack(),
+      });
     } catch (error) {
-      Alert.alert('Error', error.message || 'Could not save profile.');
+      showFeedback({
+        title: 'Could not save profile',
+        message: error.message || 'Something went wrong. Please try again.',
+        variant: 'danger',
+      });
     } finally {
       setSaving(false);
     }
@@ -219,7 +246,7 @@ export default function EditProfileScreen({ navigation }) {
             style={[styles.input, styles.bioInput]}
             value={bio}
             onChangeText={(text) => text.length <= 160 && setBio(text)}
-            placeholder="E.g. Student, just bought my first padel racket..."
+            placeholder="Tell people a bit about yourself…"
             placeholderTextColor={colors.muted}
             multiline
             maxLength={160}

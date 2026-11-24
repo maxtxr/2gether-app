@@ -32,8 +32,12 @@ export default function HomeScreen({ navigation }) {
   const rest = upcoming.filter((e) => !matchesInterests(e));
   const suggested = [...picked, ...rest].slice(0, 6);
 
-  // Pagination for reviews feed
-  const [visibleReviewsCount, setVisibleReviewsCount] = useState(10);
+  // Pagination for reviews feed — start small so Home is quick to scan and
+  // let people reveal older stories on demand.
+  const REVIEWS_PAGE_SIZE = 5;
+  const [visibleReviewsCount, setVisibleReviewsCount] = useState(
+    REVIEWS_PAGE_SIZE
+  );
 
   const allFeedReviews = Object.values(reviews || {})
     .flat()
@@ -147,10 +151,12 @@ export default function HomeScreen({ navigation }) {
                   styles.loadMoreBtn,
                   pressed && { opacity: 0.7 },
                 ]}
-                onPress={() => setVisibleReviewsCount((curr) => curr + 10)}
+                onPress={() =>
+                  setVisibleReviewsCount((curr) => curr + REVIEWS_PAGE_SIZE)
+                }
                 accessibilityRole="button"
               >
-                <Text style={styles.loadMoreText}>Show older stories</Text>
+                <Text style={styles.loadMoreText}>Show more stories</Text>
                 <Ionicons
                   name="chevron-down"
                   size={15}

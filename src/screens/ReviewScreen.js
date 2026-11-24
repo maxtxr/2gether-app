@@ -7,7 +7,6 @@ import {
   Pressable,
   Image,
   StyleSheet,
-  Alert,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,8 +32,7 @@ async function pickPhoto() {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
   if (!permission.granted) {
-    Alert.alert('Permission required', 'Please allow access to your photo library.');
-    return null;
+    throw new Error('Please allow access to your photo library in your device settings.');
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -71,12 +69,11 @@ async function pickPhoto() {
     }
   }
 
-  Alert.alert('Image too large', 'Could not compress this image below 1 MB. Please choose another one.');
-  return null;
+  throw new Error('Could not compress this image below 1 MB. Please choose another one.');
 }
 
 export default function ReviewScreen({ route, navigation }) {
-  const { events, reviews, addReview, user } = useApp();
+  const { events, reviews, addReview, user, showFeedback } = useApp();
   const event = events.find((e) => e.id === route.params.id);
 
   const existing = useMemo(() => {
@@ -119,7 +116,11 @@ export default function ReviewScreen({ route, navigation }) {
       if (picked) setPhoto(picked);
     } catch (error) {
       console.error('Error selecting review image:', error);
-      Alert.alert('Error', 'Could not prepare the selected image.');
+      showFeedback({
+        title: 'Could not prepare the photo',
+        message: error.message || 'Please choose another image.',
+        variant: 'danger',
+      });
     } finally {
       setProcessingPhoto(false);
     }
@@ -136,7 +137,11 @@ export default function ReviewScreen({ route, navigation }) {
       });
       setDone(true);
     } catch (error) {
-      Alert.alert('Could not publish your review', error.message || 'Please try again.');
+      showFeedback({
+        title: 'Could not publish your review',
+        message: error.message || 'Please try again.',
+        variant: 'danger',
+      });
     } finally {
       setSubmitting(false);
     }

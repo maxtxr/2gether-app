@@ -1,6 +1,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useRef,
   useEffect,
@@ -10,6 +11,7 @@ import {
 
 import { seedEvents } from '../data/mock';
 import { supabase } from '../../lib/supabase';
+import ConfirmModal from '../components/common/ConfirmModal';
 
 const AppContext = createContext(null);
 
@@ -50,6 +52,27 @@ function avatarPublicUrl(avatarPath) {
   return data?.publicUrl || null;
 }
 
+export { avatarPublicUrl };
+
+// Read a local (or blob/data) URI into an ArrayBuffer. Supabase Storage in
+// React Native is much more reliable with an ArrayBuffer than with a Blob
+// created from a file:// URI, which is what caused avatar uploads to fail.
+async function uriToArrayBuffer(uri) {
+  try {
+    const response = await fetch(uri);
+
+    if (response.ok) {
+      return await response.arrayBuffer();
+    }
+  } catch (error) {
+    console.warn('Could not fetch image URI directly:', error.message);
+  }
+
+  const { File } = require('expo-file-system');
+  return new File(uri).arrayBuffer();
+}
+
+
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -60,8 +83,41 @@ export function AppProvider({ children }) {
   const [reviews, setReviews] = useState({});
   const [notifications, setNotifications] = useState([]);
   const [chats, setChats] = useState({});
+  const [feedback, setFeedback] = useState(null);
 
   const isSigningUp = useRef(false);
+
+  // ---------------- IN-APP FEEDBACK ----------------
+  // One modal rendered by the provider, so every screen shows the same
+  // feedback card instead of platform alerts.
+  const showFeedback = useCallback((options) => {
+    if (!options) return;
+    setFeedback({ confirmText: 'OK', variant: 'info', ...options });
+  }, []);
+
+  const confirmFeedback = useCallback(() => {
+    const action = feedback?.onConfirm;
+    setFeedback(null);
+
+    if (action) {
+      try {
+        const result = action();
+        if (result && typeof result.catch === 'function') {
+          result.catch((error) => {
+            console.error('Feedback action failed:', error);
+          });
+        }
+      } catch (error) {
+        console.error('Feedback action failed:', error);
+      }
+    }
+  }, [feedback]);
+
+  const cancelFeedback = useCallback(() => {
+    const action = feedback?.onCancel;
+    setFeedback(null);
+    if (action) action();
+  }, [feedback]);
 
   // ---------------- AUTHENTICATION ----------------
 
@@ -73,8 +129,10 @@ export function AppProvider({ children }) {
       id: authUser.id,
       name: profile?.name || authUser.user_metadata?.name || 'New User',
       email: authUser.email,
-      bio: profile?.bio || 'New to 2Gether!',
+      bio: profile?.bio || '',
       interests: profile?.interests || [],
+      accessibility:
+        profile?.accessibility || authUser.user_metadata?.accessibility || [],
       avatarPath: profile?.avatar_path || null,
       avatarUrl: avatarPublicUrl(profile?.avatar_path),
       since: new Date(
@@ -102,20 +160,13 @@ export function AppProvider({ children }) {
   const loadProfile = async (authUser) => {
     if (!authUser) return null;
 
-    let { data: profile, error } = await supabase
+    // `*` keeps this working while optional columns (avatar_path,
+    // accessibility, …) are being added by the SQL migrations.
+    const { data: profile, error } = await supabase
       .from('profiles')
-      .select('name, bio, interests, created_at, avatar_path')
+      .select('*')
       .eq('id', authUser.id)
       .maybeSingle();
-
-    // Fallback if avatar_path column is not in the DB yet
-    if (error && /avatar_path/i.test(error.message || '')) {
-      ({ data: profile, error } = await supabase
-        .from('profiles')
-        .select('name, bio, interests, created_at')
-        .eq('id', authUser.id)
-        .maybeSingle());
-    }
 
     if (error) {
       console.error('Error loading profile:', error.message);
@@ -131,6 +182,37 @@ export function AppProvider({ children }) {
 
     return mappedUser;
   };
+
+  // Perfil público de outro utilizador (por exemplo, o organizador de um
+  // evento). Não altera o utilizador autenticado.
+  const loadPublicProfile = useCallback(async (userId) => {
+    if (!userId) return null;
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return {
+      id: userId,
+      name: profile?.name || 'Member',
+      bio: profile?.bio || '',
+      interests: Array.isArray(profile?.interests) ? profile.interests : [],
+      accessibility: Array.isArray(profile?.accessibility)
+        ? profile.accessibility
+        : [],
+      avatarUrl: avatarPublicUrl(profile?.avatar_path),
+      since: profile?.created_at
+        ? new Date(profile.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            year: 'numeric',
+          })
+        : null,
+    };
+  }, []);
 
   // Verificar se já existe uma sessão iniciada
   useEffect(() => {
@@ -368,7 +450,7 @@ export function AppProvider({ children }) {
 
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, name, avatar_path')
+        .select('*')
         .in('id', userIds);
 
       if (profilesError) throw profilesError;
@@ -622,16 +704,54 @@ export function AppProvider({ children }) {
     if (patch.name !== undefined) updates.name = patch.name;
     if (patch.bio !== undefined) updates.bio = patch.bio;
     if (patch.interests !== undefined) updates.interests = patch.interests;
+    if (patch.accessibility !== undefined) {
+      updates.accessibility = patch.accessibility;
+    }
     if (patch.avatar_path !== undefined) updates.avatar_path = patch.avatar_path;
 
     if (Object.keys(updates).length === 0) return;
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', user.id)
-      .select('name, bio, interests, created_at, avatar_path')
-      .single();
+    const runUpdate = (payload) =>
+      supabase
+        .from('profiles')
+        .update(payload)
+        .eq('id', user.id)
+        .select('*')
+        .single();
+
+    let { data, error } = await runUpdate(updates);
+
+    // Graceful fallback while the optional columns are not in the database
+    // yet. The SQL migrations add them, but saving name/bio/interests should
+    // never break because of a missing avatar_path/accessibility column.
+    if (error && /accessibility/i.test(error.message || '')) {
+      // No SQL migration yet? Keep the choice in the auth metadata so it
+      // still survives a reload, then save the other fields.
+      if (Array.isArray(updates.accessibility)) {
+        const { error: metadataError } = await supabase.auth.updateUser({
+          data: { accessibility: updates.accessibility },
+        });
+
+        if (metadataError) throw metadataError;
+      }
+
+      const withoutAccessibility = { ...updates };
+      delete withoutAccessibility.accessibility;
+      ({ data, error } = await runUpdate(withoutAccessibility));
+    }
+
+    if (error && /avatar_path/i.test(error.message || '')) {
+      if (updates.avatar_path) {
+        throw new Error(
+          'The database is missing the profile photo column. Run supabase/avatar.sql and try again.'
+        );
+      }
+
+      const withoutAvatar = { ...updates };
+      delete withoutAvatar.avatar_path;
+      delete withoutAvatar.accessibility;
+      ({ data, error } = await runUpdate(withoutAvatar));
+    }
 
     if (error) throw error;
 
@@ -641,10 +761,22 @@ export function AppProvider({ children }) {
           id: currentUser.id,
           email: currentUser.email,
           created_at: currentUser.created_at,
-          user_metadata: { name: currentUser.name },
+          user_metadata: {
+            name: currentUser.name,
+            accessibility:
+              updates.accessibility !== undefined
+                ? updates.accessibility
+                : currentUser.accessibility,
+          },
         },
         data
       );
+
+      // `mapUser` only receives the updated profile row; keep the original
+      // "member since" label if the row does not carry a usable date.
+      if (!mapped.since || mapped.since === 'Invalid Date') {
+        mapped.since = currentUser.since;
+      }
 
       // Bust cache when the same storage path is reused
       if (mapped.avatarUrl && updates.avatar_path) {
@@ -665,18 +797,12 @@ export function AppProvider({ children }) {
       throw new Error('No image selected.');
     }
 
-    const response = await fetch(imageUri);
-
-    if (!response.ok) {
-      throw new Error('Could not read the selected image.');
-    }
-
-    const imageBlob = await response.blob();
+    const imageBuffer = await uriToArrayBuffer(imageUri);
     const imagePath = `${user.id}/avatar.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from('avatars')
-      .upload(imagePath, imageBlob, {
+      .upload(imagePath, imageBuffer, {
         contentType: 'image/jpeg',
         upsert: true,
       });
@@ -1307,7 +1433,7 @@ export function AppProvider({ children }) {
 
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
-      .select('id, name, avatar_path')
+      .select('*')
       .in('id', otherUserIds);
 
     if (profilesError) throw profilesError;
@@ -1552,6 +1678,8 @@ export function AppProvider({ children }) {
     deleteAccount,
     updateProfile,
     uploadAvatar,
+    loadPublicProfile,
+    showFeedback,
 
     events,
     setEvents,
@@ -1597,6 +1725,18 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={value}>
       {children}
+
+      <ConfirmModal
+        visible={!!feedback}
+        title={feedback?.title}
+        message={feedback?.message}
+        variant={feedback?.variant}
+        confirmText={feedback?.confirmText}
+        confirmVariant={feedback?.confirmVariant}
+        cancelText={feedback?.cancelText}
+        onConfirm={confirmFeedback}
+        onCancel={cancelFeedback}
+      />
     </AppContext.Provider>
   );
 }

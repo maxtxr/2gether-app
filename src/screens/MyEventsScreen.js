@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.green,
+    color: colors.text,
   },
   sub: {
     color: colors.muted,

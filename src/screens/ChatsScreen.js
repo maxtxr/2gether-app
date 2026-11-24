@@ -6,7 +6,6 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +16,7 @@ import { Avatar } from '../components';
 import { supabase } from '../../lib/supabase';
 
 export default function ChatsScreen({ navigation }) {
-  const { loadUserConversations } = useApp();
+  const { loadUserConversations, showFeedback } = useApp();
 
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,11 +26,15 @@ export default function ChatsScreen({ navigation }) {
       const data = await loadUserConversations();
       setConversations(data);
     } catch (error) {
-      Alert.alert('Error loading chats', error.message);
+      showFeedback({
+        title: 'Error loading chats',
+        message: error.message,
+        variant: 'danger',
+      });
     } finally {
       setLoading(false);
     }
-  }, [loadUserConversations]);
+  }, [loadUserConversations, showFeedback]);
 
   useFocusEffect(
     useCallback(() => {
@@ -172,7 +175,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.green,
+    color: colors.text,
   },
   subtitle: {
     color: colors.muted,

@@ -5,7 +5,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,35 +19,45 @@ const PREFERENCES = [
   { icon: 'notifications-outline', label: 'Notifications', value: 'On' },
 ];
 
-export default function SettingsScreen() {
-  const { logout, deleteAccount } = useApp();
+export default function SettingsScreen({ navigation }) {
+  const { logout, deleteAccount, showFeedback, user } = useApp();
   const [deleting, setDeleting] = useState(false);
 
+  const preferences = PREFERENCES.map((item) =>
+    item.label === 'Accessibility'
+      ? {
+          ...item,
+          value: user?.accessibility?.length
+            ? `${user.accessibility.length} selected`
+            : 'None',
+        }
+      : item
+  );
+
   const confirmDeleteAccount = () =>
-    Alert.alert(
-      'Delete account',
-      'This will permanently delete your account and profile data. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (deleting) return;
-            setDeleting(true);
-            try {
-              await deleteAccount();
-            } catch (error) {
-              Alert.alert(
-                'Could not delete account',
-                error?.message || 'Something went wrong.'
-              );
-              setDeleting(false);
-            }
-          },
-        },
-      ]
-    );
+    showFeedback({
+      title: 'Delete account?',
+      message:
+        'This will permanently delete your account and profile data. This cannot be undone.',
+      variant: 'danger',
+      confirmText: 'Delete account',
+      confirmVariant: 'danger',
+      cancelText: 'Keep my account',
+      onConfirm: async () => {
+        if (deleting) return;
+        setDeleting(true);
+        try {
+          await deleteAccount();
+        } catch (error) {
+          showFeedback({
+            title: 'Could not delete account',
+            message: error?.message || 'Something went wrong.',
+            variant: 'danger',
+          });
+          setDeleting(false);
+        }
+      },
+    });
 
   return (
     <ScrollView
@@ -58,8 +67,8 @@ export default function SettingsScreen() {
     >
       <Text style={styles.sectionTitle}>PREFERENCES</Text>
       <View style={styles.card}>
-        {PREFERENCES.map((item, index) => {
-          const isLast = index === PREFERENCES.length - 1;
+        {preferences.map((item, index) => {
+          const isLast = index === preferences.length - 1;
           return (
             <Pressable
               key={item.label}
@@ -68,7 +77,18 @@ export default function SettingsScreen() {
                 !isLast && styles.rowDivider,
                 pressed && styles.pressed,
               ]}
-              onPress={() => Alert.alert(item.label, 'Coming soon.')}
+              onPress={() => {
+                if (item.label === 'Accessibility') {
+                  navigation.navigate('EditProfile');
+                  return;
+                }
+
+                showFeedback({
+                  title: item.label,
+                  message: 'This preference is coming soon.',
+                  variant: 'info',
+                });
+              }}
               accessibilityRole="button"
             >
               <Ionicons
@@ -83,6 +103,24 @@ export default function SettingsScreen() {
             </Pressable>
           );
         })}
+      </View>
+
+      <Text style={styles.sectionTitle}>LEGAL & PRIVACY</Text>
+      <View style={styles.card}>
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+          onPress={() => navigation.navigate('Legal')}
+          accessibilityRole="button"
+        >
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={18}
+            color={colors.muted}
+            style={styles.rowIcon}
+          />
+          <Text style={styles.label}>Terms & Privacy Policy</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+        </Pressable>
       </View>
 
       <Text style={styles.sectionTitle}>ACCOUNT</Text>

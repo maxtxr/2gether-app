@@ -5,7 +5,7 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Alert,
+  Pressable,
 } from 'react-native';
 
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -37,6 +37,7 @@ export default function EventDetailScreen({ route, navigation }) {
     leaveEvent,
     getOrCreateConversation,
     deleteEvent,
+    showFeedback,
   } = useApp();
 
   const event = events.find((e) => e.id === route.params.id);
@@ -206,11 +207,11 @@ export default function EventDetailScreen({ route, navigation }) {
   const MAX_AVATARS = 4;
   const others = participantIds
     .filter((id) => id !== user?.id)
-    .map((id) => participantNames[id] || '?');
+    .map((id) => ({ id, name: participantNames[id] || '' }));
 
   const shown = [
-    ...(going ? ['ME'] : []),
-    ...others.map((name) => initials(name) || '?'),
+    ...(going ? [{ id: user?.id, name: user?.name || '', isMe: true }] : []),
+    ...others,
   ].slice(0, MAX_AVATARS);
 
   const toggleWaitlist = async () => {
@@ -270,7 +271,11 @@ export default function EventDetailScreen({ route, navigation }) {
       navigation.goBack();
     } catch (error) {
       console.error('Error deleting event:', error);
-      Alert.alert('Error', 'Could not delete this event. Please try again.');
+      showFeedback({
+        title: 'Could not delete event',
+        message: error.message || 'Please try again.',
+        variant: 'danger',
+      });
     } finally {
       setIsDeleting(false);
     }
@@ -332,13 +337,35 @@ export default function EventDetailScreen({ route, navigation }) {
 
         <Text style={styles.title}>{event.title}</Text>
 
-        <View style={styles.hostRow}>
+        <Pressable
+          style={({ pressed }) => [styles.hostRow, pressed && { opacity: 0.7 }]}
+          onPress={() => {
+            if (!event.host_id) return;
+            navigation.navigate('UserProfile', {
+              userId: event.host_id,
+              name: event.host,
+            });
+          }}
+          disabled={!event.host_id}
+          accessibilityRole={event.host_id ? 'button' : 'text'}
+          accessibilityLabel={
+            event.host_id ? `View ${event.host}'s profile` : undefined
+          }
+        >
           <Avatar label={initials(event.host)} dark />
           <View style={styles.hostInfo}>
             <Text style={styles.hostLabel}>Organised by</Text>
             <Text style={styles.hostName}>{event.host}</Text>
           </View>
-        </View>
+          {!!event.host_id && (
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={colors.muted}
+              style={{ marginLeft: 'auto' }}
+            />
+          )}
+        </Pressable>
 
         <View style={styles.headerBottom}>
           <View
@@ -452,8 +479,35 @@ export default function EventDetailScreen({ route, navigation }) {
         </View>
 
         <View style={styles.avatars}>
-          {shown.map((p, i) => (
-            <Avatar key={i} label={p} />
+          {shown.map((person) => (
+            <Pressable
+              key={person.id}
+              onPress={() => {
+                if (person.isMe) {
+                  navigation.navigate('Tabs', { screen: 'Profile' });
+                  return;
+                }
+
+                if (person.id) {
+                  navigation.navigate('UserProfile', {
+                    userId: person.id,
+                    name: person.name,
+                  });
+                }
+              }}
+              disabled={!person.id}
+              accessibilityRole={person.id ? 'button' : 'text'}
+              accessibilityLabel={
+                person.id
+                  ? `View ${person.isMe ? 'your' : `${person.name}'s`} profile`
+                  : undefined
+              }
+            >
+              <Avatar
+                label={person.isMe ? 'ME' : initials(person.name) || '?'}
+                name={person.name}
+              />
+            </Pressable>
           ))}
 
           {count > shown.length && (
@@ -566,7 +620,11 @@ export default function EventDetailScreen({ route, navigation }) {
                       });
                     }
                   } catch (error) {
-                    Alert.alert('Chat error', error.message);
+                    showFeedback({
+                      title: 'Chat error',
+                      message: error.message,
+                      variant: 'danger',
+                    });
                   }
                 }}
               />
@@ -765,6 +823,7 @@ const styles = StyleSheet.create({
 
   hostInfo: {
     marginLeft: 9,
+    flex: 1,
   },
 
   hostLabel: {

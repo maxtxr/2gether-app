@@ -48,14 +48,15 @@ Built with **React Native + Expo** and a **Supabase** backend (auth, database, s
 
 ### 👤 Profile
 
-- Photo (avatar upload), name, bio and interests (editable)
+- Photo (avatar upload), name, bio, interests and **accessibility preferences** (editable)
 - Gamified **badges** (First Event, Social Butterfly, Host)
 - Attended events, received reviews and average rating
+- **View another member's profile** (tap the organiser on an event) with their bio, interests, hosted events and reviews
 - Settings, log out
 
 ### 🔐 Auth
 
-- Sign up / log in with email and password (Supabase Auth), with inline validation and password rules
+- Sign up / log in with email and password (Supabase Auth), with clear validation and error feedback
 
 ## Tech stack
 
@@ -131,9 +132,11 @@ Setup:
 2. Enable **pg_cron** in Database → Extensions (the daily reset uses it).
 3. In Supabase → **SQL Editor**, run these in this order:
    - `supabase/avatar.sql` — profile photos
+   - `supabase/profile_accessibility.sql` — accessibility preferences saved on the profile
    - `supabase/events_subcategory_icon.sql` — event subcategories and icons
    - `supabase/notifications.sql` — notify hosts when someone joins
    - `supabase/reviews_accessibility.sql` — accessibility question in reviews
+   - `supabase/delete_account.sql` — RPC used by "Delete account"
    - `supabase/seed.sql` — test data and the daily reset
 4. Log in as `joao@2gether.test`.
 
@@ -147,6 +150,20 @@ To reset the test data immediately, run in the SQL Editor:
 select public.reset_test_data();
 ```
 
+### Simulating a review
+
+1. Log in as `joao@2gether.test`.
+2. Open **My events → Past**. *Evening River Run* appears without a review yet.
+3. Tap **Review**, pick a star rating, write something and optionally add a photo.
+4. Publish it. The event then shows its rating in **Past**, and the review appears in the **Home** feed, on the event page and on the host's profile.
+
+Other flows you can try with the same seed data:
+
+- **Already reviewed** — *Beach Volleyball Sunday* is in **Past** with a rating.
+- **Cancel a participation** — *Riverside 5K Run* is upcoming and already joined.
+- **Host notifications** — *Morning Stretch & Walk* has a participant and a chat message.
+- **Received reviews** — log in as `maya@2gether.test` or `paul@2gether.test` to see reviews on their hosted events and their public profiles.
+
 ## Project structure
 
 ```text
@@ -154,9 +171,11 @@ App.js                     # root navigator (auth stack vs. app stack), web aler
 lib/supabase.js            # Supabase client (reads .env)
 supabase/
   avatar.sql               # avatars bucket + profiles.avatar_path column
+  profile_accessibility.sql # profiles.accessibility (accessibility preferences)
   events_subcategory_icon.sql # events.subcategory and events.icon columns
   notifications.sql        # trigger: notify the host when someone joins their event
   reviews_accessibility.sql # reviews.accessibility_accuracy (yes / partly / no)
+  delete_account.sql       # RPC that removes the user's data and auth account
   seed.sql                 # test data for the scenarios + daily automatic reset (pg_cron)
 src/
   context/AppContext.js    # global state + all Supabase calls (auth, events, chats, notifications, reviews, badges)
@@ -169,22 +188,21 @@ src/
     profile/               # EditProfileModal, ProfileComponents
   utils/validation.js      # email and password validation
   screens/                 # Login, SignUp, Home, Explore (Search), MyEvents, Notifications,
-                           # Profile, Settings, EventDetail, CreateEvent, Review, Chat, EventChats
+                           # Profile, UserProfile, Settings, EventDetail, CreateEvent, Review, Chat, EventChats
 assets/                    # app icon, splash, favicon, Android adaptive icons
 ```
 
 ## Platform notes
 
 - **Android / iOS (Expo Go)**: full experience, including maps. No map API keys are needed in Expo Go.
-- **Web**: everything except maps. The map view shows a placeholder, and system dialogs use the browser's `alert`/`confirm`.
+- **Web**: everything except maps. The map view shows a placeholder, and confirmations use the app's own modal instead of platform alerts.
 
 ## Not implemented yet
 
 These parts of the interface are visible but are placeholders:
 
-- Settings: language, time format, accessibility, theme and notification preferences ("Coming soon")
+- Settings: language, time format, theme and notification preferences ("Coming soon")
 - "Forgot password?" only shows a message, no email is sent
-- "Delete account" only logs out
 
 ## License
 
