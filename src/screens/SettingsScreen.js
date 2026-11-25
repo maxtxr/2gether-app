@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme';
@@ -14,25 +15,14 @@ import { useApp } from '../context/AppContext';
 const PREFERENCES = [
   { icon: 'globe-outline', label: 'Language', value: 'English' },
   { icon: 'time-outline', label: 'Time format', value: '24 h' },
-  { icon: 'accessibility-outline', label: 'Accessibility', value: '' },
   { icon: 'color-palette-outline', label: 'Theme', value: 'Light' },
-  { icon: 'notifications-outline', label: 'Notifications', value: 'On' },
+  { icon: 'notifications-outline', label: 'Notifications', isToggle: true },
 ];
 
 export default function SettingsScreen({ navigation }) {
-  const { logout, deleteAccount, showFeedback, user } = useApp();
+  const { logout, deleteAccount, showFeedback } = useApp();
   const [deleting, setDeleting] = useState(false);
-
-  const preferences = PREFERENCES.map((item) =>
-    item.label === 'Accessibility'
-      ? {
-          ...item,
-          value: user?.accessibility?.length
-            ? `${user.accessibility.length} selected`
-            : 'None',
-        }
-      : item
-  );
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   const confirmDeleteAccount = () =>
     showFeedback({
@@ -67,8 +57,33 @@ export default function SettingsScreen({ navigation }) {
     >
       <Text style={styles.sectionTitle}>PREFERENCES</Text>
       <View style={styles.card}>
-        {preferences.map((item, index) => {
-          const isLast = index === preferences.length - 1;
+        {PREFERENCES.map((item, index) => {
+          const isLast = index === PREFERENCES.length - 1;
+
+          if (item.isToggle) {
+            return (
+              <View
+                key={item.label}
+                style={[styles.row, !isLast && styles.rowDivider]}
+              >
+                <Ionicons
+                  name={item.icon}
+                  size={18}
+                  color={colors.muted}
+                  style={styles.rowIcon}
+                />
+                <Text style={styles.label}>{item.label}</Text>
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={setNotificationsEnabled}
+                  trackColor={{ false: '#D1D5DB', true: colors.green }}
+                  thumbColor="#FFFFFF"
+                  style={styles.switch}
+                />
+              </View>
+            );
+          }
+
           return (
             <Pressable
               key={item.label}
@@ -77,18 +92,6 @@ export default function SettingsScreen({ navigation }) {
                 !isLast && styles.rowDivider,
                 pressed && styles.pressed,
               ]}
-              onPress={() => {
-                if (item.label === 'Accessibility') {
-                  navigation.navigate('EditProfile');
-                  return;
-                }
-
-                showFeedback({
-                  title: item.label,
-                  message: 'This preference is coming soon.',
-                  variant: 'info',
-                });
-              }}
               accessibilityRole="button"
             >
               <Ionicons
@@ -203,7 +206,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    height: 50,
   },
   rowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -222,6 +225,10 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     marginRight: 8,
+  },
+  switch: {
+    transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }],
+    marginRight: -4,
   },
   pressed: {
     backgroundColor: '#F9FAFB',

@@ -9,16 +9,9 @@ import {
   Platform,
   Modal,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
-
-const MapView = Platform.OS !== 'web'
-  ? require('react-native-maps').default
-  : null;
-
-const Marker = Platform.OS !== 'web'
-  ? require('react-native-maps').Marker
-  : null;
-
+import { WebView } from 'react-native-webview';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors, radii } from '../theme';
@@ -28,67 +21,135 @@ import { Chip, Button, ConfirmModal } from '../components';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import EventCard from '../components/events/EventCard';
 
-// Zona (cidade / concelho) a partir de um resultado do Photon
-const areaFromPhoton = (properties = {}) =>
-  properties.city || properties.district || properties.county || properties.state || '';
-
-// Nome curto e legível de um resultado do Photon
-const placeFromPhoton = (properties = {}) =>
-  properties.name ||
-  properties.street ||
-  properties.city ||
-  properties.district ||
-  properties.county ||
-  '';
-
-// Endereço completo a partir de um resultado do Photon
-const addressFromPhoton = (properties = {}) => {
-  const streetAddress = [properties.housenumber, properties.street]
-    .filter(Boolean)
-    .join(' ');
-
-  return [
-    properties.name,
-    streetAddress,
-    properties.postcode,
-    properties.city,
-    properties.state,
-    properties.country,
-  ]
-    .filter(Boolean)
-    .filter((part, index, list) => list.indexOf(part) === index)
-    .join(', ');
-};
-
-// Descobre o nome, a zona, o endereço e as coordenadas de um local
-// (pesquisa por texto ou reverse geocoding de um ponto no mapa).
+// Clean OpenStreetMap Nominatim Geocoder
 async function lookupLocation({ coordinate, query }) {
-  if (!coordinate && (!query || query.length < 3)) return null;
+  try {
+    let url = '';
+    if (coordinate) {
+      url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coordinate.latitude}&lon=${coordinate.longitude}&addressdetails=1&zoom=18`;
+    } else if (query && query.trim().length >= 3) {
+      url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(
+        query.trim()
+      )}&limit=5&addressdetails=1`;
+    } else {
+      return null;
+    }
 
-  const url = coordinate
-    ? `https://photon.komoot.io/reverse?lat=${coordinate.latitude}&lon=${coordinate.longitude}&lang=en`
-    : `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1&lang=en`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': '2Gether-App/1.0 (NOVA-FCT-IPM)',
+        Accept: 'application/json',
+      },
+    });
 
-  const response = await fetch(url);
-  if (!response.ok) return null;
+    if (!response.ok) return null;
+    const data = await response.json();
 
-  const data = await response.json();
-  const feature = data.features?.[0];
-  if (!feature) return null;
+    // 1. Reverse lookup from Map Tap
+    if (coordinate) {
+      if (!data || data.error) return null;
+      const addr = data.address || {};
+      const place =
+        data.name ||
+        addr.leisure ||
+        addr.amenity ||
+        addr.road ||
+        addr.suburb ||
+        addr.city ||
+        'Selected Point';
+      const area = addr.city || addr.town || addr.municipality || addr.county || '';
+      const street = [addr.road, addr.house_number].filter(Boolean).join(' ');
+      const address = [street, area].filter(Boolean).join(', ') || data.display_name;
 
-  const [lng, lat] = feature.geometry.coordinates;
-  const properties = feature.properties || {};
+      return { place, area, address, coordinate };
+    }
 
-  return {
-    area: areaFromPhoton(properties),
-    place: placeFromPhoton(properties),
-    address: addressFromPhoton(properties),
-    coordinate: {
-      latitude: Number(lat),
-      longitude: Number(lng),
-    },
-  };
+    // 2. Search Autocomplete List
+    if (Array.isArray(data) && data.length > 0) {
+      return data.map((item) => {
+        const addr = item.address || {};
+        const place =
+          item.name ||
+          addr.leisure ||
+          addr.amenity ||
+          addr.road ||
+          addr.city ||
+          'Location';
+        const area = addr.city || addr.town || addr.municipality || addr.county || '';
+        const street = [addr.road, addr.house_number].filter(Boolean).join(' ');
+        const address = [street, area].filter(Boolean).join(', ') || item.display_name;
+
+        return {
+          title: place,
+          area,
+          address,
+          coordinate: {
+            latitude: parseFloat(item.lat),
+            longitude: parseFloat(item.lon),
+          },
+        };
+      });
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('Geocoding error:', err);
+    return null;
+  }
 }
+
+const LEAFLET_PICKER_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background-color: #f8faf9; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map', { zoomControl: false }).setView([38.72, -9.14], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    var marker = null;
+
+    function setPin(lat, lng, zoom) {
+      if (marker) {
+        marker.setLatLng([lat, lng]);
+      } else {
+        marker = L.marker([lat, lng]).addTo(map);
+      }
+      map.setView([lat, lng], zoom || 15);
+    }
+
+    map.on('click', function(e) {
+      setPin(e.latlng.lat, e.latlng.lng, map.getZoom());
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'MAP_CLICK',
+          latitude: e.latlng.lat,
+          longitude: e.latlng.lng
+        }));
+      }
+    });
+
+    window.onload = function() {
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
+      }
+    };
+  </script>
+</body>
+</html>
+`;
 
 export default function CreateEventScreen({ navigation, route }) {
   const { createEvent, updateEvent, showFeedback } = useApp();
@@ -102,20 +163,13 @@ export default function CreateEventScreen({ navigation, route }) {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showSubcategoryDropdown, setShowSubcategoryDropdown] = useState(false);
 
-  // Fallback para a última categoria ("Other") se a categoria já não existir
   const selectedCategory =
     EVENT_CATEGORIES.find((item) => item.name === category) ||
     EVENT_CATEGORIES[EVENT_CATEGORIES.length - 1];
 
-  // Dropdown flutuante das subcategorias
   const { height: windowHeight } = useWindowDimensions();
   const subcategoryFieldRef = useRef(null);
-  const [dropdownAnchor, setDropdownAnchor] = useState({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-  });
+  const [dropdownAnchor, setDropdownAnchor] = useState({ x: 0, y: 0, width: 0, height: 0 });
 
   const openSubcategoryDropdown = () => {
     subcategoryFieldRef.current?.measureInWindow((x, y, width, height) => {
@@ -129,10 +183,7 @@ export default function CreateEventScreen({ navigation, route }) {
     const spaceBelow = windowHeight - (y + height) - 16;
     const spaceAbove = y - 16;
     const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(
-      120,
-      Math.min(280, openUp ? spaceAbove : spaceBelow)
-    );
+    const maxHeight = Math.max(120, Math.min(280, openUp ? spaceAbove : spaceBelow));
 
     return openUp
       ? { left: x, width, bottom: windowHeight - y + 4, maxHeight }
@@ -150,7 +201,12 @@ export default function CreateEventScreen({ navigation, route }) {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [tempTime, setTempTime] = useState(new Date());
 
+  // Location states
   const [place, setPlace] = useState('');
+  const [selectedArea, setSelectedArea] = useState('');
+  const [selectedAddress, setSelectedAddress] = useState('');
+  const [selectedCoordinate, setSelectedCoordinate] = useState(null);
+
   const [capacity, setCapacity] = useState('10');
   const [access, setAccess] = useState([]);
 
@@ -158,25 +214,21 @@ export default function CreateEventScreen({ navigation, route }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Map
+  // Map Picker Modal States
   const [showMapPicker, setShowMapPicker] = useState(false);
-  const [selectedCoordinate, setSelectedCoordinate] = useState(null);
-  const [selectedAddress, setSelectedAddress] = useState('');
-  const [selectedArea, setSelectedArea] = useState('');
+  const [tempCoordinate, setTempCoordinate] = useState(null);
+  const [tempPlace, setTempPlace] = useState('');
+  const [tempArea, setTempArea] = useState('');
+  const [tempAddress, setTempAddress] = useState('');
+  const [isResolvingLocation, setIsResolvingLocation] = useState(false);
 
-  const [mapRegion, setMapRegion] = useState({
-    latitude: 39.5,
-    longitude: -8.0,
-    latitudeDelta: 4.8,
-    longitudeDelta: 5.5,
-  });
-
-  // Map search
+  // Search autocomplete in modal
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
-  const [isResolvingLocation, setIsResolvingLocation] = useState(false);
+
+  const webViewRef = useRef(null);
+  const isMapReadyRef = useRef(false);
 
   useEffect(() => {
     if (!eventToEdit) return;
@@ -188,51 +240,34 @@ export default function CreateEventScreen({ navigation, route }) {
     setDescription(eventToEdit.description || '');
 
     setPlace(eventToEdit.place || '');
-    setCapacity(String(eventToEdit.capacity || 10));
-    setAccess(eventToEdit.accessibility || []);
-
     setSelectedAddress(eventToEdit.address || '');
     setSelectedArea(eventToEdit.area || '');
 
     if (eventToEdit.lat != null && eventToEdit.lng != null) {
-      const coordinate = {
+      setSelectedCoordinate({
         latitude: eventToEdit.lat,
         longitude: eventToEdit.lng,
-      };
-
-      setSelectedCoordinate(coordinate);
-      setMapRegion({
-        ...coordinate,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
       });
     }
+
+    setCapacity(String(eventToEdit.capacity || 10));
+    setAccess(eventToEdit.accessibility || []);
 
     const dateParts = (eventToEdit.when || '').split(', ');
     if (dateParts.length === 2) {
       const [day, month, year] = dateParts[0].split('/').map(Number);
-
       setDate(new Date(year, month - 1, day));
       setTime(dateParts[1]);
     }
   }, [eventToEdit]);
 
-  const selectedSearchQuery = useRef(null);
-
-  const today = new Date();
-  const minDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
   const toggleAccess = (a) => {
-    setAccess((p) =>
-      p.includes(a) ? p.filter((x) => x !== a) : [...p, a]
-    );
+    setAccess((p) => (p.includes(a) ? p.filter((x) => x !== a) : [...p, a]));
   };
 
   const selectedDateTime = (() => {
     if (!date || !time.trim()) return null;
-
     const [hours, minutes] = time.split(':').map(Number);
-
     if (
       !Number.isInteger(hours) ||
       !Number.isInteger(minutes) ||
@@ -243,15 +278,12 @@ export default function CreateEventScreen({ navigation, route }) {
     ) {
       return null;
     }
-
     const eventDate = new Date(date);
     eventDate.setHours(hours, minutes, 0, 0);
-
     return eventDate;
   })();
 
-  const isDateTimeValid =
-    selectedDateTime && selectedDateTime > new Date();
+  const isDateTimeValid = selectedDateTime && selectedDateTime > new Date();
 
   const ready =
     title.trim() &&
@@ -262,137 +294,73 @@ export default function CreateEventScreen({ navigation, route }) {
     Number.isInteger(Number(capacity)) &&
     Number(capacity) > 0;
 
-  // Date picker
   const handleDateChange = (event, selectedDate) => {
     if (selectedDate) {
       const newDate = new Date(selectedDate);
-
-      if (Platform.OS === 'ios') {
-        setTempDate(newDate);
-      } else {
-        setDate(newDate);
-      }
+      if (Platform.OS === 'ios') setTempDate(newDate);
+      else setDate(newDate);
     }
-
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
+    if (Platform.OS === 'android') setShowDatePicker(false);
   };
 
-  // Time picker
   const handleTimeChange = (event, selectedTime) => {
     if (selectedTime) {
       const newTime = new Date(selectedTime);
       setTempTime(newTime);
-
       if (Platform.OS === 'android') {
         const hours = String(newTime.getHours()).padStart(2, '0');
         const minutes = String(newTime.getMinutes()).padStart(2, '0');
         setTime(`${hours}:${minutes}`);
       }
     }
-
-    if (Platform.OS === 'android') {
-      setShowTimePicker(false);
-    }
+    if (Platform.OS === 'android') setShowTimePicker(false);
   };
 
   const formatDate = (value) => {
     if (!value) return '';
-
     const parsedDate = new Date(value);
-
     if (isNaN(parsedDate.getTime())) return '';
-
     const day = String(parsedDate.getDate()).padStart(2, '0');
     const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
     const year = parsedDate.getFullYear();
-
     return `${day}/${month}/${year}`;
   };
 
-  // Open map
+  // Open modal
   const openMapPicker = () => {
-    if (selectedCoordinate) {
-      setMapRegion({
-        ...selectedCoordinate,
-        latitudeDelta: 0.02,
-        longitudeDelta: 0.02,
-      });
-    } else {
-      setMapRegion({
-        latitude: 39.5,
-        longitude: -8.0,
-        latitudeDelta: 4.8,
-        longitudeDelta: 5.5,
-      });
-    }
-
+    setTempCoordinate(selectedCoordinate);
+    setTempPlace(place);
+    setTempArea(selectedArea);
+    setTempAddress(selectedAddress);
     setSearchQuery('');
     setSearchResults([]);
-    setSearchError('');
     setShowMapPicker(true);
   };
 
-  // Automatic location suggestions
-  useEffect(() => {
-    const query = searchQuery.trim();
+  const syncLeafletPin = (lat, lng, zoom = 15) => {
+    if (webViewRef.current && isMapReadyRef.current) {
+      webViewRef.current.injectJavaScript(`setPin(${lat}, ${lng}, ${zoom}); true;`);
+    }
+  };
 
-    if (!showMapPicker || query.length < 3) {
+  // Search debounce effect
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!showMapPicker || q.length < 3) {
       setSearchResults([]);
       setIsSearching(false);
-      setSearchError('');
-      return;
-    }
-
-    if (selectedSearchQuery.current === query) {
-      selectedSearchQuery.current = null;
       return;
     }
 
     const controller = new AbortController();
-
     const timer = setTimeout(async () => {
-      try {
-        setIsSearching(true);
-        setSearchError('');
-
-        const url =
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en`;
-
-        const response = await fetch(url, {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error('Could not search for this location.');
-        }
-
-        const data = await response.json();
-
-        if (!controller.signal.aborted) {
-          setSearchResults(data.features || []);
-
-          if (!data.features || data.features.length === 0) {
-            setSearchError('No locations found.');
-          }
-        }
-      } catch (error) {
-        const wasCancelled =
-          controller.signal.aborted ||
-          error.name === 'AbortError' ||
-          error.message?.includes('canceled');
-
-        if (!wasCancelled) {
-          console.error('Location search error:', error);
-          setSearchError('Could not search. Please try again.');
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsSearching(false);
-        }
+      setIsSearching(true);
+      const results = await lookupLocation({ query: q });
+      if (!controller.signal.aborted) {
+        setSearchResults(results || []);
+        setIsSearching(false);
       }
-    }, 200);
+    }, 400);
 
     return () => {
       clearTimeout(timer);
@@ -400,126 +368,60 @@ export default function CreateEventScreen({ navigation, route }) {
     };
   }, [searchQuery, showMapPicker]);
 
-  // Select search result
-  const selectSearchResult = (result) => {
-    const properties = result.properties || {};
-    const coordinates = result.geometry.coordinates;
-
-    const coordinate = {
-      latitude: Number(coordinates[1]),
-      longitude: Number(coordinates[0]),
-    };
-
-    const locationName =
-      properties.name ||
-      properties.street ||
-      properties.city ||
-      'Selected location';
-
-    selectedSearchQuery.current = locationName;
-
-    setSelectedCoordinate(coordinate);
-    setSelectedAddress(addressFromPhoton(properties) || locationName);
-    setSelectedArea(areaFromPhoton(properties));
-    setPlace(locationName);
-
-    setMapRegion({
-      ...coordinate,
-      latitudeDelta: 0.015,
-      longitudeDelta: 0.015,
-    });
-
-    setSearchQuery(locationName);
+  const selectSearchResult = (item) => {
+    setTempCoordinate(item.coordinate);
+    setTempPlace(item.title);
+    setTempArea(item.area);
+    setTempAddress(item.address);
+    syncLeafletPin(item.coordinate.latitude, item.coordinate.longitude, 16);
+    setSearchQuery('');
     setSearchResults([]);
-    setSearchError('');
   };
 
-  // Ao tocar no mapa, transformar o ponto numa localização legível. Sem isto
-  // o utilizador escolhia um pin mas continuava obrigado a escrever o local.
-  const handleMapPress = async (mapEvent) => {
-    const coordinate = mapEvent.nativeEvent.coordinate;
-    const coordinateLabel = `${coordinate.latitude.toFixed(4)}, ${coordinate.longitude.toFixed(4)}`;
-
-    setSelectedCoordinate(coordinate);
-    setSelectedAddress('');
-    setSelectedArea('');
-    setIsResolvingLocation(true);
-
+  const handleLeafletMessage = async (e) => {
     try {
-      const found = await lookupLocation({ coordinate });
+      const data = JSON.parse(e.nativeEvent.data);
+      if (data.type === 'MAP_READY') {
+        isMapReadyRef.current = true;
+        if (tempCoordinate) {
+          syncLeafletPin(tempCoordinate.latitude, tempCoordinate.longitude);
+        }
+      } else if (data.type === 'MAP_CLICK') {
+        const coord = { latitude: data.latitude, longitude: data.longitude };
+        setTempCoordinate(coord);
+        setIsResolvingLocation(true);
 
-      if (found) {
-        setSelectedAddress(found.address || '');
-        setSelectedArea(found.area || '');
-        setPlace(found.place || found.area || coordinateLabel);
-      } else {
-        setPlace(coordinateLabel);
+        const found = await lookupLocation({ coordinate: coord });
+        if (found) {
+          setTempPlace(found.place);
+          setTempAddress(found.address);
+          setTempArea(found.area);
+        } else {
+          setTempPlace('Selected Point');
+          setTempAddress('');
+          setTempArea('');
+        }
+        setIsResolvingLocation(false);
       }
-    } catch (error) {
-      console.warn('Could not reverse geocode the selected point:', error);
-      setPlace(coordinateLabel);
-    } finally {
+    } catch {
       setIsResolvingLocation(false);
     }
   };
 
-  const confirmMapSelection = async () => {
-    if (!selectedCoordinate) return;
-
-    // If the user tapped "Confirm" before the reverse lookup finished, do it
-    // now so the location field is always filled in.
-    if (!place.trim()) {
-      setIsResolvingLocation(true);
-
-      try {
-        const found = await lookupLocation({ coordinate: selectedCoordinate });
-
-        if (found) {
-          setSelectedAddress(found.address || '');
-          setSelectedArea(found.area || '');
-          setPlace(found.place || found.area || 'Map pin');
-        }
-      } catch (error) {
-        console.warn('Could not reverse geocode the selected point:', error);
-      } finally {
-        setIsResolvingLocation(false);
-      }
-    }
-
+  const confirmMapSelection = () => {
+    if (!tempCoordinate) return;
+    setSelectedCoordinate(tempCoordinate);
+    setPlace(tempPlace || 'Selected Location');
+    setSelectedArea(tempArea);
+    setSelectedAddress(tempAddress);
     setShowMapPicker(false);
   };
 
-  // Publish event
   const submit = async () => {
     if (!ready || isSubmitting) return;
 
     try {
       setIsSubmitting(true);
-
-      let coordinate = selectedCoordinate;
-      let area = selectedArea;
-      let address = selectedAddress;
-
-      if (!area || !coordinate || !address) {
-        try {
-          const found = await lookupLocation({
-            coordinate,
-            query: place.trim(),
-          });
-
-          if (found) {
-            area = area || found.area;
-            address = address || found.address;
-            coordinate = coordinate || found.coordinate;
-          }
-        } catch (lookupError) {
-          console.warn(
-            'Could not look up the event area:',
-            lookupError.message
-          );
-        }
-      }
-
       const eventData = {
         title: title.trim(),
         category,
@@ -529,10 +431,10 @@ export default function CreateEventScreen({ navigation, route }) {
         description: description.trim(),
         when: `${formatDate(date)}, ${time.trim()}`,
         place: place.trim(),
-        address: address || place.trim(),
-        area: area || null,
-        lat: coordinate?.latitude ?? null,
-        lng: coordinate?.longitude ?? null,
+        address: selectedAddress || place.trim(),
+        area: selectedArea || null,
+        lat: selectedCoordinate?.latitude ?? null,
+        lng: selectedCoordinate?.longitude ?? null,
         capacity: parseInt(capacity, 10) || 10,
         accessibility: access,
         icon: selectedCategory.icon,
@@ -547,7 +449,6 @@ export default function CreateEventScreen({ navigation, route }) {
       setShowPreview(false);
       setDone(true);
     } catch (error) {
-      console.error('Error creating event:', error);
       showFeedback({
         title: isEditing ? 'Could not save event' : 'Could not publish event',
         message: error.message || 'Please try again.',
@@ -577,78 +478,48 @@ export default function CreateEventScreen({ navigation, route }) {
       contentContainerStyle={{ padding: 16 }}
       keyboardShouldPersistTaps="handled"
     >
-      {field('Event name', title, setTitle, {
-        placeholder: 'Walk at the park',
-      })}
+      {field('Event name', title, setTitle, { placeholder: 'e.g. Morning Stretch & Walk' })}
 
       {/* CATEGORY */}
       <Text style={styles.label}>Category</Text>
-
       <Pressable
         style={styles.selectionInput}
         onPress={() => setShowCategoryModal(true)}
         disabled={isSubmitting}
       >
         <View style={styles.selectionValue}>
-          <MaterialCommunityIcons
-            name={selectedCategory.icon}
-            size={22}
-            color={colors.green}
-          />
+          <MaterialCommunityIcons name={selectedCategory.icon} size={22} color={colors.green} />
           <Text style={styles.selectionText}>{selectedCategory.name}</Text>
         </View>
-
-        <Ionicons
-          name="chevron-down"
-          size={22}
-          color={colors.muted}
-        />
+        <Ionicons name="chevron-down" size={22} color={colors.muted} />
       </Pressable>
 
       {/* SUBCATEGORY */}
       {selectedCategory.subcategories.length > 0 && (
         <>
           <Text style={styles.label}>Subcategory (optional)</Text>
-
           <Pressable
             ref={subcategoryFieldRef}
             style={styles.selectionInput}
             onPress={openSubcategoryDropdown}
             disabled={isSubmitting}
           >
-            <Text
-              style={[
-                styles.selectionText,
-                !subcategory && styles.placeholderText,
-              ]}
-            >
+            <Text style={[styles.selectionText, !subcategory && styles.placeholderText]}>
               {subcategory || 'Select a subcategory'}
             </Text>
-
-            <Ionicons
-              name={showSubcategoryDropdown ? 'chevron-up' : 'chevron-down'}
-              size={22}
-              color={colors.muted}
-            />
+            <Ionicons name={showSubcategoryDropdown ? 'chevron-up' : 'chevron-down'} size={22} color={colors.muted} />
           </Pressable>
         </>
       )}
 
       <Text style={styles.label}>Level</Text>
-
       <View style={styles.wrap}>
         {LEVELS.map((l) => (
-          <Chip
-            key={l}
-            label={l}
-            selected={level === l}
-            onPress={() => setLevel(l)}
-          />
+          <Chip key={l} label={l} selected={level === l} onPress={() => setLevel(l)} />
         ))}
       </View>
 
       <Text style={styles.label}>Accessibility</Text>
-
       <View style={styles.wrap}>
         {ACCESSIBILITY.map((item) => (
           <Chip
@@ -662,255 +533,81 @@ export default function CreateEventScreen({ navigation, route }) {
       </View>
 
       {field('Description', description, setDescription, {
-        placeholder: 'Pace, what to bring, who it is for',
+        placeholder: 'Pace, meeting spot specifics, what to bring...',
         multiline: true,
-        style: [
-          styles.input,
-          {
-            height: 90,
-            textAlignVertical: 'top',
-            borderRadius: 30,
-          },
-        ],
+        style: [styles.input, { height: 90, textAlignVertical: 'top', borderRadius: 20 }],
       })}
 
       {/* DATE AND TIME */}
       <View style={{ flexDirection: 'row' }}>
         <View style={{ flex: 1, marginRight: 8 }}>
           <Text style={styles.label}>Date</Text>
-
-          {Platform.OS === 'web' ? (
-            <input
-              type="date"
-              min={minDate}
-              value={date ? formatDate(date).split('/').reverse().join('-') : ''}
-              onChange={(event) => {
-                if (event.target.value) {
-                  setDate(new Date(`${event.target.value}T12:00:00`));
-                }
-              }}
-              style={{
-                padding: 12,
-                borderRadius: 20,
-                border: `1px solid ${colors.border}`,
-                fontSize: 15,
-                width: '100%',
-                boxSizing: 'border-box',
-              }}
-            />
-          ) : (
-            <Pressable
-              style={styles.input}
-              onPress={() => {
-                setTempDate(date || new Date());
-                setShowDatePicker(true);
-              }}
-            >
-              <Text style={{ color: date ? colors.text : colors.muted }}>
-                {date ? formatDate(date) : 'Select date'}
-              </Text>
-            </Pressable>
-          )}
+          <Pressable
+            style={styles.input}
+            onPress={() => {
+              setTempDate(date || new Date());
+              setShowDatePicker(true);
+            }}
+          >
+            <Text style={{ color: date ? colors.text : colors.muted }}>
+              {date ? formatDate(date) : 'Select date'}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={{ flex: 1, marginLeft: 8 }}>
           <Text style={styles.label}>Time</Text>
-
-          {Platform.OS === 'web' ? (
-            <input
-              type="time"
-              value={time}
-              onChange={(event) => setTime(event.target.value)}
-              style={{
-                padding: 12,
-                borderRadius: 20,
-                border: `1px solid ${colors.border}`,
-                fontSize: 15,
-                width: '100%',
-                boxSizing: 'border-box',
-              }}
-            />
-          ) : (
-            <Pressable
-              style={styles.input}
-              onPress={() => {
-                const initialTime = new Date();
-
-                if (time) {
-                  const [hours, minutes] = time.split(':').map(Number);
-                  initialTime.setHours(hours, minutes, 0, 0);
-                }
-
-                setTempTime(initialTime);
-                setShowTimePicker(true);
-              }}
-            >
-              <Text style={{ color: time ? colors.text : colors.muted }}>
-                {time || 'Select time'}
-              </Text>
-            </Pressable>
-          )}
+          <Pressable
+            style={styles.input}
+            onPress={() => {
+              const initialTime = new Date();
+              if (time) {
+                const [hours, minutes] = time.split(':').map(Number);
+                initialTime.setHours(hours, minutes, 0, 0);
+              }
+              setTempTime(initialTime);
+              setShowTimePicker(true);
+            }}
+          >
+            <Text style={{ color: time ? colors.text : colors.muted }}>
+              {time || 'Select time'}
+            </Text>
+          </Pressable>
         </View>
       </View>
 
       {!!(date && time.trim() && !isDateTimeValid) && (
-        <Text style={styles.validationError}>
-          Please select a future date and time.
-        </Text>
+        <Text style={styles.validationError}>Please select a future date and time.</Text>
       )}
 
-      {/* IPHONE DATE PICKER */}
-      {Platform.OS === 'ios' && (
-        <Modal
-          visible={showDatePicker}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowDatePicker(false)}
-        >
-          <Pressable
-            style={styles.modalOverlay}
-            onPress={() => setShowDatePicker(false)}
-          >
-            <Pressable
-              style={styles.datePickerContainer}
-              onPress={() => {}}
-            >
-              <View style={styles.datePickerHeader}>
-                <Pressable onPress={() => setShowDatePicker(false)}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => {
-                    setDate(tempDate);
-                    setShowDatePicker(false);
-                  }}
-                >
-                  <Text style={styles.doneText}>Done</Text>
-                </Pressable>
-              </View>
-
-              <DateTimePicker
-                value={tempDate}
-                mode="date"
-                display="spinner"
-                minimumDate={new Date()}
-                onChange={handleDateChange}
-                locale="en-GB"
-                themeVariant="light"
-                textColor="#222222"
-              />
-            </Pressable>
-          </Pressable>
-        </Modal>
-      )}
-
-      {/* IPHONE TIME PICKER */}
-      {Platform.OS === 'ios' && (
-        <Modal
-          visible={showTimePicker}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowTimePicker(false)}
-        >
-          <Pressable
-            style={styles.modalOverlay}
-            onPress={() => setShowTimePicker(false)}
-          >
-            <Pressable
-              style={styles.datePickerContainer}
-              onPress={() => {}}
-            >
-              <View style={styles.datePickerHeader}>
-                <Pressable onPress={() => setShowTimePicker(false)}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => {
-                    const hours = String(tempTime.getHours()).padStart(2, '0');
-                    const minutes = String(tempTime.getMinutes()).padStart(2, '0');
-
-                    setTime(`${hours}:${minutes}`);
-                    setShowTimePicker(false);
-                  }}
-                >
-                  <Text style={styles.doneText}>Done</Text>
-                </Pressable>
-              </View>
-
-              <DateTimePicker
-                value={tempTime}
-                mode="time"
-                display="spinner"
-                onChange={handleTimeChange}
-                themeVariant="light"
-                textColor="#222222"
-                locale="en-GB"
-              />
-            </Pressable>
-          </Pressable>
-        </Modal>
-      )}
-
-      {/* ANDROID DATE PICKER */}
-      {Platform.OS === 'android' && showDatePicker && (
-        <DateTimePicker
-          value={date || new Date()}
-          mode="date"
-          display="calendar"
-          minimumDate={new Date()}
-          onChange={handleDateChange}
-          onDismiss={() => setShowDatePicker(false)}
-          locale="en-GB"
-        />
-      )}
-
-      {/* ANDROID TIME PICKER */}
-      {Platform.OS === 'android' && showTimePicker && (
-        <DateTimePicker
-          value={tempTime}
-          mode="time"
-          display="clock"
-          onChange={handleTimeChange}
-          onDismiss={() => setShowTimePicker(false)}
-          is24Hour
-        />
-      )}
-
-      {/* LOCATION */}
-      <Text style={styles.label}>Location</Text>
-
-      <TextInput
-        style={styles.input}
-        value={place}
-        onChangeText={(value) => {
-          setPlace(value);
-          setSelectedCoordinate(null);
-          setSelectedAddress('');
-          setSelectedArea('');
-        }}
-        placeholder="Add a place or address"
-        placeholderTextColor={colors.muted}
-      />
-
-      {Platform.OS !== 'web' && (
-        <Pressable
-          style={styles.mapButton}
-          onPress={openMapPicker}
-        >
-          <Text style={styles.mapButtonText}>
-            {selectedCoordinate ? 'Change map location' : 'Choose on map'}
+      {/* LOCATION: DIRECT TAP TO OPEN MAP */}
+      <Text style={styles.label}>Meeting Location</Text>
+      <Pressable
+        style={[styles.locationCard, place && styles.locationCardFilled]}
+        onPress={openMapPicker}
+        accessibilityRole="button"
+      >
+        <View style={[styles.locationIconBg, place && { backgroundColor: '#E8F2EC' }]}>
+          <Ionicons
+            name="location"
+            size={22}
+            color={place ? colors.green : colors.muted}
+          />
+        </View>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={[styles.locationMainText, !place && styles.placeholderText]} numberOfLines={1}>
+            {place || 'Choose meeting spot on OpenStreetMap'}
           </Text>
-        </Pressable>
-      )}
-
-      {selectedCoordinate && (
-        <Text style={styles.coordinateText}>
-          Location selected: {place || 'Map pin'}
-          {selectedArea ? ` · ${selectedArea}` : ''}
-        </Text>
-      )}
+          {!!(selectedArea || selectedAddress) && (
+            <Text style={styles.locationSubText} numberOfLines={1}>
+              {selectedArea ? `${selectedArea} · ` : ''}{selectedAddress}
+            </Text>
+          )}
+        </View>
+        <View style={styles.pickButton}>
+          <Text style={styles.pickButtonText}>{place ? 'Change' : 'Pick on Map'}</Text>
+        </View>
+      </Pressable>
 
       {field('Participant capacity', capacity, setCapacity, {
         keyboardType: 'number-pad',
@@ -918,41 +615,25 @@ export default function CreateEventScreen({ navigation, route }) {
       })}
 
       <Button
-        title={isEditing ? "Save Changes" : "Preview Event"}
+        title={isEditing ? 'Save Changes' : 'Preview Event'}
         disabled={!ready || isSubmitting}
         onPress={() => setShowPreview(true)}
         style={{ marginTop: 24 }}
       />
 
-      {/* EVENT PREVIEW */}
-      <Modal
-        visible={showPreview}
-        animationType="slide"
-        onRequestClose={() => setShowPreview(false)}
-      >
+      {/* EVENT PREVIEW MODAL */}
+      <Modal visible={showPreview} animationType="slide" onRequestClose={() => setShowPreview(false)}>
         <View style={styles.previewModalContainer}>
           <View style={styles.previewHeader}>
             <Pressable onPress={() => setShowPreview(false)}>
-              <Ionicons
-                name="arrow-back"
-                size={26}
-                color={colors.text}
-              />
+              <Ionicons name="arrow-back" size={26} color={colors.text} />
             </Pressable>
-
             <Text style={styles.previewTitle}>Event Preview</Text>
-
             <View style={{ width: 26 }} />
           </View>
 
-          <ScrollView
-            style={styles.previewScroll}
-            contentContainerStyle={styles.previewScrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <Text style={styles.previewSubtitle}>
-              This is how your event will appear in the feed.
-            </Text>
+          <ScrollView style={styles.previewScroll} contentContainerStyle={styles.previewScrollContent} showsVerticalScrollIndicator={false}>
+            <Text style={styles.previewSubtitle}>This is how your event will appear in the feed.</Text>
 
             <EventCard
               event={{
@@ -965,9 +646,7 @@ export default function CreateEventScreen({ navigation, route }) {
                 place: place.trim(),
                 area: selectedArea || '',
                 level,
-                accessibilityTag: access.length
-                  ? access.join(' · ')
-                  : null,
+                accessibilityTag: access.length ? access.join(' · ') : null,
               }}
               right={
                 <View style={styles.previewBadge}>
@@ -978,18 +657,13 @@ export default function CreateEventScreen({ navigation, route }) {
 
             <View style={styles.previewDetails}>
               <Text style={styles.previewSectionTitle}>Event details</Text>
-
               <Text style={styles.previewLabel}>Category</Text>
-              <Text style={styles.previewValue}>
-                {category}{subcategory ? ` · ${subcategory}` : ''}
-              </Text>
+              <Text style={styles.previewValue}>{category}{subcategory ? ` · ${subcategory}` : ''}</Text>
 
               {description.trim() !== '' && (
                 <>
                   <Text style={styles.previewLabel}>Description</Text>
-                  <Text style={styles.previewValue}>
-                    {description.trim()}
-                  </Text>
+                  <Text style={styles.previewValue}>{description.trim()}</Text>
                 </>
               )}
 
@@ -999,28 +673,16 @@ export default function CreateEventScreen({ navigation, route }) {
               {access.length > 0 && (
                 <>
                   <Text style={styles.previewLabel}>Accessibility</Text>
-                  <Text style={styles.previewValue}>
-                    {access.join(', ')}
-                  </Text>
+                  <Text style={styles.previewValue}>{access.join(', ')}</Text>
                 </>
               )}
             </View>
           </ScrollView>
 
           <View style={styles.previewButtons}>
+            <Button title="Edit" variant="outline" onPress={() => setShowPreview(false)} style={{ flex: 1 }} />
             <Button
-              title="Edit"
-              variant="outline"
-              onPress={() => setShowPreview(false)}
-              style={{ flex: 1 }}
-            />
-
-            <Button
-              title={
-                isSubmitting
-                  ? (isEditing ? 'Saving...' : 'Publishing...')
-                  : (isEditing ? 'Save Changes' : 'Publish Event')
-              }
+              title={isSubmitting ? (isEditing ? 'Saving...' : 'Publishing...') : (isEditing ? 'Save Changes' : 'Publish Event')}
               disabled={isSubmitting}
               onPress={submit}
               style={{ flex: 1 }}
@@ -1029,154 +691,114 @@ export default function CreateEventScreen({ navigation, route }) {
         </View>
       </Modal>
 
-      {/* MAP PICKER */}
-      {Platform.OS !== 'web' && (
-        <Modal
-          visible={showMapPicker}
-          animationType="slide"
-          onRequestClose={() => setShowMapPicker(false)}
-        >
-          <View style={styles.mapModalContainer}>
-            <View style={styles.mapHeader}>
-              <Pressable onPress={() => setShowMapPicker(false)}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </Pressable>
+      {/* MAP MODAL (OPENSTREETMAP + LEAFLET) */}
+      <Modal visible={showMapPicker} animationType="slide" onRequestClose={() => setShowMapPicker(false)}>
+        <View style={styles.mapModalContainer}>
+          <View style={styles.mapHeader}>
+            <Pressable onPress={() => setShowMapPicker(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+            <Text style={styles.mapTitle}>Choose location</Text>
+            <View style={{ width: 50 }} />
+          </View>
 
-              <Text style={styles.mapTitle}>Choose location</Text>
-
-              <View style={{ width: 50 }} />
-            </View>
-
-            {/* MAP SEARCH */}
-            <View style={styles.mapSearchContainer}>
+          {/* Autocomplete Search input */}
+          <View style={styles.mapSearchContainer}>
+            <View style={styles.searchBarRow}>
+              <Ionicons name="search-outline" size={18} color={colors.muted} />
               <TextInput
                 style={styles.mapSearchInput}
                 value={searchQuery}
-                onChangeText={(value) => {
-                  setSearchQuery(value);
-                  setSearchError('');
-                  setSearchResults([]);
-                }}
-                placeholder="Search for a place..."
+                onChangeText={setSearchQuery}
+                placeholder="Search place or address (e.g. Parque da Paz)"
                 placeholderTextColor={colors.muted}
                 returnKeyType="search"
               />
-
-              {isSearching && (
-                <Text style={styles.searchStatus}>
-                  Searching...
-                </Text>
-              )}
-
-              {searchError ? (
-                <Text style={styles.searchError}>{searchError}</Text>
+              {isSearching ? (
+                <ActivityIndicator size="small" color={colors.green} />
+              ) : !!searchQuery ? (
+                <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={colors.muted} />
+                </Pressable>
               ) : null}
+            </View>
 
-              {searchResults.map((result) => {
-                const properties = result.properties;
-
-                const resultTitle =
-                  properties.name ||
-                  properties.street ||
-                  properties.city ||
-                  'Location';
-
-                const resultAddress = [
-                  properties.street,
-                  properties.city,
-                  properties.state,
-                  properties.country,
-                ].filter(Boolean).join(', ');
-
-                return (
+            {/* Results dropdown */}
+            {searchResults.length > 0 && (
+              <View style={styles.resultsDropdown}>
+                {searchResults.map((item, idx) => (
                   <Pressable
-                    key={`${properties.osm_type}-${properties.osm_id}`}
-                    style={styles.searchResult}
-                    onPress={() => selectSearchResult(result)}
+                    key={`${item.coordinate.latitude}-${idx}`}
+                    style={styles.searchResultItem}
+                    onPress={() => selectSearchResult(item)}
                   >
-                    <Text style={styles.searchResultTitle}>
-                      {resultTitle}
-                    </Text>
-
-                    <Text style={styles.searchResultAddress}>
-                      {resultAddress || properties.country || ''}
-                    </Text>
+                    <Ionicons name="location-outline" size={16} color={colors.green} style={{ marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.resultTitle}>{item.title}</Text>
+                      <Text style={styles.resultSub} numberOfLines={1}>{item.address}</Text>
+                    </View>
                   </Pressable>
-                );
-              })}
-            </View>
-
-            <Text style={styles.mapInstructions}>
-              Search for a place or tap the map to choose a location manually.
-            </Text>
-
-            <MapView
-              style={styles.map}
-              region={mapRegion}
-              onRegionChangeComplete={setMapRegion}
-              onPress={handleMapPress}
-            >
-              {selectedCoordinate && (
-                <Marker coordinate={selectedCoordinate} />
-              )}
-            </MapView>
-
-            <View style={styles.mapFooter}>
-              <Text style={styles.coordinateText}>
-                {isResolvingLocation
-                  ? 'Finding the address…'
-                  : selectedCoordinate
-                    ? place
-                      ? `${place}${selectedArea ? ` · ${selectedArea}` : ''}`
-                      : `${selectedCoordinate.latitude.toFixed(5)}, ${selectedCoordinate.longitude.toFixed(5)}`
-                    : 'Tap the map to select a location'}
-              </Text>
-
-              <Pressable
-                style={[
-                  styles.confirmMapButton,
-                  (!selectedCoordinate || isResolvingLocation) && {
-                    opacity: 0.5,
-                  },
-                ]}
-                disabled={!selectedCoordinate || isResolvingLocation}
-                onPress={confirmMapSelection}
-              >
-                <Text style={styles.confirmMapButtonText}>
-                  {isResolvingLocation ? 'Finding address…' : 'Confirm location'}
-                </Text>
-              </Pressable>
-            </View>
+                ))}
+              </View>
+            )}
           </View>
-        </Modal>
-      )}
 
-      {/* CATEGORY PICKER */}
-      <Modal
-        visible={showCategoryModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowCategoryModal(false)}
-      >
-        <Pressable
-          style={styles.categoryModalOverlay}
-          onPress={() => setShowCategoryModal(false)}
-        >
-          <Pressable
-            style={styles.categoryModalContent}
-            onPress={() => {}}
-          >
+          <Text style={styles.mapHint}>Tap on the map or select a search result to drop a pin.</Text>
+
+          {/* Map view */}
+          <View style={styles.mapWrapper}>
+            <WebView
+              ref={webViewRef}
+              originWhitelist={['*']}
+              source={{ html: LEAFLET_PICKER_HTML }}
+              style={StyleSheet.absoluteFill}
+              onMessage={handleLeafletMessage}
+              javaScriptEnabled
+              domStorageEnabled
+            />
+          </View>
+
+          {/* Footer Bar */}
+          <View style={styles.mapFooter}>
+            <View style={styles.selectedLocCard}>
+              <Ionicons name="pin" size={20} color={colors.green} />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={styles.selectedLocTitle} numberOfLines={1}>
+                  {isResolvingLocation
+                    ? 'Identifying location…'
+                    : tempPlace || 'No location selected'}
+                </Text>
+                {!!(tempArea || tempAddress) && (
+                  <Text style={styles.selectedLocSub} numberOfLines={1}>
+                    {tempArea ? `${tempArea} · ` : ''}{tempAddress}
+                  </Text>
+                )}
+              </View>
+              {isResolvingLocation && <ActivityIndicator size="small" color={colors.green} />}
+            </View>
+
+            <Pressable
+              style={[
+                styles.confirmMapButton,
+                (!tempCoordinate || isResolvingLocation) && { opacity: 0.5 },
+              ]}
+              disabled={!tempCoordinate || isResolvingLocation}
+              onPress={confirmMapSelection}
+            >
+              <Text style={styles.confirmMapButtonText}>Use this location</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* CATEGORY PICKER MODAL */}
+      <Modal visible={showCategoryModal} transparent animationType="slide" onRequestClose={() => setShowCategoryModal(false)}>
+        <Pressable style={styles.categoryModalOverlay} onPress={() => setShowCategoryModal(false)}>
+          <Pressable style={styles.categoryModalContent} onPress={() => {}}>
             <View style={styles.categoryModalHeader}>
-              <Text style={styles.categoryModalTitle}>
-                Choose a category
-              </Text>
-
+              <Text style={styles.categoryModalTitle}>Choose a category</Text>
               <Pressable onPress={() => setShowCategoryModal(false)}>
-                <Ionicons
-                  name="close"
-                  size={24}
-                  color={colors.muted}
-                />
+                <Ionicons name="close" size={24} color={colors.muted} />
               </Pressable>
             </View>
 
@@ -1184,14 +806,10 @@ export default function CreateEventScreen({ navigation, route }) {
               <View style={styles.categoryGrid}>
                 {EVENT_CATEGORIES.map((item) => {
                   const selected = category === item.name;
-
                   return (
                     <Pressable
                       key={item.name}
-                      style={[
-                        styles.categoryOption,
-                        selected && styles.categoryOptionSelected,
-                      ]}
+                      style={[styles.categoryOption, selected && styles.categoryOptionSelected]}
                       onPress={() => {
                         setCategory(item.name);
                         setSubcategory('');
@@ -1200,19 +818,8 @@ export default function CreateEventScreen({ navigation, route }) {
                       }}
                       disabled={isSubmitting}
                     >
-                      <MaterialCommunityIcons
-                        name={item.icon}
-                        size={30}
-                        color={selected ? colors.green : colors.text}
-                      />
-
-                      <Text
-                        numberOfLines={2}
-                        style={[
-                          styles.categoryOptionText,
-                          selected && styles.categoryOptionTextSelected,
-                        ]}
-                      >
+                      <MaterialCommunityIcons name={item.icon} size={30} color={selected ? colors.green : colors.text} />
+                      <Text numberOfLines={2} style={[styles.categoryOptionText, selected && styles.categoryOptionTextSelected]}>
                         {item.name}
                       </Text>
                     </Pressable>
@@ -1225,23 +832,10 @@ export default function CreateEventScreen({ navigation, route }) {
       </Modal>
 
       {/* SUBCATEGORY DROPDOWN */}
-      <Modal
-        visible={showSubcategoryDropdown}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setShowSubcategoryDropdown(false)}
-      >
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={() => setShowSubcategoryDropdown(false)}
-        >
+      <Modal visible={showSubcategoryDropdown} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowSubcategoryDropdown(false)}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSubcategoryDropdown(false)}>
           <View style={[styles.dropdownMenu, dropdownLayout]}>
-            <ScrollView
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-              keyboardShouldPersistTaps="handled"
-            >
+            <ScrollView nestedScrollEnabled showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
               {selectedCategory.subcategories.map((item) => (
                 <Pressable
                   key={item}
@@ -1251,23 +845,10 @@ export default function CreateEventScreen({ navigation, route }) {
                     setShowSubcategoryDropdown(false);
                   }}
                 >
-                  <Text
-                    style={[
-                      styles.dropdownOptionText,
-                      subcategory === item &&
-                        styles.dropdownOptionTextSelected,
-                    ]}
-                  >
+                  <Text style={[styles.dropdownOptionText, subcategory === item && styles.dropdownOptionTextSelected]}>
                     {item}
                   </Text>
-
-                  {subcategory === item && (
-                    <Ionicons
-                      name="checkmark"
-                      size={19}
-                      color={colors.green}
-                    />
-                  )}
+                  {subcategory === item && <Ionicons name="checkmark" size={19} color={colors.green} />}
                 </Pressable>
               ))}
 
@@ -1279,9 +860,7 @@ export default function CreateEventScreen({ navigation, route }) {
                     setShowSubcategoryDropdown(false);
                   }}
                 >
-                  <Text style={styles.clearOptionText}>
-                    Clear selection
-                  </Text>
+                  <Text style={styles.clearOptionText}>Clear selection</Text>
                 </Pressable>
               )}
             </ScrollView>
@@ -1289,14 +868,52 @@ export default function CreateEventScreen({ navigation, route }) {
         </Pressable>
       </Modal>
 
+      {/* IOS / ANDROID PICKERS */}
+      {Platform.OS === 'ios' && (
+        <>
+          <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
+            <Pressable style={styles.modalOverlay} onPress={() => setShowDatePicker(false)}>
+              <View style={styles.datePickerContainer}>
+                <View style={styles.datePickerHeader}>
+                  <Pressable onPress={() => setShowDatePicker(false)}><Text style={styles.cancelText}>Cancel</Text></Pressable>
+                  <Pressable onPress={() => { setDate(tempDate); setShowDatePicker(false); }}><Text style={styles.doneText}>Done</Text></Pressable>
+                </View>
+                <DateTimePicker value={tempDate} mode="date" display="spinner" minimumDate={new Date()} onChange={handleDateChange} locale="en-GB" />
+              </View>
+            </Pressable>
+          </Modal>
+
+          <Modal visible={showTimePicker} transparent animationType="slide" onRequestClose={() => setShowTimePicker(false)}>
+            <Pressable style={styles.modalOverlay} onPress={() => setShowTimePicker(false)}>
+              <View style={styles.datePickerContainer}>
+                <View style={styles.datePickerHeader}>
+                  <Pressable onPress={() => setShowTimePicker(false)}><Text style={styles.cancelText}>Cancel</Text></Pressable>
+                  <Pressable onPress={() => {
+                    const hours = String(tempTime.getHours()).padStart(2, '0');
+                    const minutes = String(tempTime.getMinutes()).padStart(2, '0');
+                    setTime(`${hours}:${minutes}`);
+                    setShowTimePicker(false);
+                  }}><Text style={styles.doneText}>Done</Text></Pressable>
+                </View>
+                <DateTimePicker value={tempTime} mode="time" display="spinner" onChange={handleTimeChange} locale="en-GB" />
+              </View>
+            </Pressable>
+          </Modal>
+        </>
+      )}
+
+      {Platform.OS === 'android' && showDatePicker && (
+        <DateTimePicker value={date || new Date()} mode="date" display="calendar" minimumDate={new Date()} onChange={handleDateChange} onDismiss={() => setShowDatePicker(false)} locale="en-GB" />
+      )}
+
+      {Platform.OS === 'android' && showTimePicker && (
+        <DateTimePicker value={tempTime} mode="time" display="clock" onChange={handleTimeChange} onDismiss={() => setShowTimePicker(false)} is24Hour />
+      )}
+
       <ConfirmModal
         visible={done}
         title={isEditing ? 'Event updated!' : 'Event published!'}
-        message={
-          isEditing
-            ? 'Your event changes have been saved.'
-            : 'Your event is now listed under Hosting in My events.'
-        }
+        message={isEditing ? 'Your event changes have been saved.' : 'Your event is now listed under Hosting in My events.'}
         onConfirm={() => {
           setDone(false);
           navigation.goBack();
@@ -1330,11 +947,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  hint: {
-    textAlign: 'center',
-    color: colors.muted,
+  locationCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationCardFilled: {
+    borderColor: colors.green,
+    backgroundColor: '#FBFDFB',
+  },
+  locationIconBg: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  locationMainText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  locationSubText: {
     fontSize: 12,
-    marginTop: 8,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  placeholderText: {
+    color: colors.muted,
+    fontWeight: '400',
+  },
+  pickButton: {
+    backgroundColor: colors.chip || '#E5E7EB',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+  },
+  pickButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
   },
   modalOverlay: {
     flex: 1,
@@ -1363,25 +1021,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  mapButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.pill,
-    padding: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  mapButtonText: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  coordinateText: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 8,
-  },
   mapModalContainer: {
     flex: 1,
     backgroundColor: '#fff',
@@ -1400,71 +1039,105 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
-  mapInstructions: {
-    color: colors.muted,
-    fontSize: 13,
+  mapSearchContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingTop: 10,
+    zIndex: 10,
   },
-  map: {
+  searchBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: radii.pill,
+    paddingHorizontal: 12,
+    height: 42,
+  },
+  mapSearchInput: {
     flex: 1,
+    fontSize: 13,
+    color: colors.text,
+    marginLeft: 6,
+    paddingVertical: 0,
+  },
+  resultsDropdown: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 6,
+    maxHeight: 180,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  resultTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  resultSub: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  mapHint: {
+    color: colors.muted,
+    fontSize: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  mapWrapper: {
+    flex: 1,
+    position: 'relative',
   },
   mapFooter: {
     padding: 16,
-    paddingBottom: 30,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    backgroundColor: '#fff',
+  },
+  selectedLocCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 10,
+  },
+  selectedLocTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  selectedLocSub: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 1,
   },
   confirmMapButton: {
-    backgroundColor: colors.text,
+    backgroundColor: colors.green,
     borderRadius: radii.pill,
-    padding: 15,
+    padding: 14,
     alignItems: 'center',
-    marginTop: 12,
   },
   confirmMapButtonText: {
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
-  },
-  mapSearchContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  mapSearchInput: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.pill,
-    padding: 12,
-    fontSize: 14,
-    color: colors.text,
-  },
-  searchStatus: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 8,
-  },
-  searchResult: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  searchResultTitle: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  searchResultAddress: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 3,
-  },
-  searchError: {
-    color: '#D9534F',
-    fontSize: 13,
-    marginTop: 8,
   },
   selectionInput: {
     minHeight: 52,
@@ -1487,10 +1160,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 14,
     fontWeight: '600',
-  },
-  placeholderText: {
-    color: colors.muted,
-    fontWeight: '400',
   },
   dropdownMenu: {
     position: 'absolute',
@@ -1588,8 +1257,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 4,
   },
-
-  // EVENT PREVIEW
   previewModalContainer: {
     flex: 1,
     backgroundColor: colors.bg,

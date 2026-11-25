@@ -21,7 +21,7 @@ import { useApp } from '../context/AppContext';
 import { Avatar, Button, Chip } from '../components';
 
 export default function EditProfileScreen({ navigation }) {
-  const { user, updateProfile, uploadAvatar, showFeedback } = useApp();
+  const { user, updateProfile, uploadAvatar, deleteAvatar, showFeedback } = useApp();
 
   const [name, setName] = useState(user?.name || '');
   const [bio, setBio] = useState(user?.bio || '');
@@ -29,7 +29,10 @@ export default function EditProfileScreen({ navigation }) {
   const [accessibility, setAccessibility] = useState(user?.accessibility || []);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deletingAvatar, setDeletingAvatar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const hasAvatar = Boolean(user?.avatarUrl || user?.avatarPath);
 
   // Extract all distinct sports & activities from EVENT_CATEGORIES
   const allInterests = useMemo(() => {
@@ -112,7 +115,6 @@ export default function EditProfileScreen({ navigation }) {
             { compress: quality, format: ImageManipulator.SaveFormat.JPEG }
           );
 
-          // expo-file-system.getInfoAsync is unavailable on web — accept first compression
           if (Platform.OS === 'web') {
             compressedImage = manipulated;
             break;
@@ -164,6 +166,37 @@ export default function EditProfileScreen({ navigation }) {
     }
   };
 
+  const handleDeleteAvatar = () => {
+    showFeedback({
+      title: 'Remove photo?',
+      message: 'Are you sure you want to delete your profile photo?',
+      variant: 'danger',
+      confirmText: 'Remove',
+      confirmVariant: 'danger',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        if (deletingAvatar) return;
+        setDeletingAvatar(true);
+        try {
+          await deleteAvatar();
+          showFeedback({
+            title: 'Photo removed',
+            message: 'Your profile picture has been deleted.',
+            variant: 'success',
+          });
+        } catch (error) {
+          showFeedback({
+            title: 'Could not remove photo',
+            message: error.message || 'Something went wrong. Please try again.',
+            variant: 'danger',
+          });
+        } finally {
+          setDeletingAvatar(false);
+        }
+      },
+    });
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
@@ -205,7 +238,7 @@ export default function EditProfileScreen({ navigation }) {
         <View style={styles.avatarCard}>
           <Pressable
             onPress={handlePickAvatar}
-            disabled={uploadingAvatar}
+            disabled={uploadingAvatar || deletingAvatar}
             style={styles.avatarPicker}
             accessibilityRole="button"
             accessibilityLabel="Change profile picture"
@@ -219,9 +252,32 @@ export default function EditProfileScreen({ navigation }) {
               )}
             </View>
           </Pressable>
+
           <Text style={styles.changePhotoText}>
-            {uploadingAvatar ? 'Uploading...' : 'Tap to change profile photo'}
+            {uploadingAvatar ? 'Uploading...' : 'Tap photo to change'}
           </Text>
+
+          {hasAvatar && (
+            <Pressable
+              onPress={handleDeleteAvatar}
+              disabled={deletingAvatar || uploadingAvatar}
+              style={({ pressed }) => [
+                styles.deletePhotoButton,
+                pressed && styles.pressedOpacity,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Remove profile picture"
+            >
+              {deletingAvatar ? (
+                <ActivityIndicator size="small" color={colors.danger} />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                  <Text style={styles.deletePhotoText}>Remove photo</Text>
+                </>
+              )}
+            </Pressable>
+          )}
         </View>
 
         {/* Full Name */}
@@ -253,7 +309,7 @@ export default function EditProfileScreen({ navigation }) {
           />
         </View>
 
-        {/* Sports & Interests with Search & Pinned Selection */}
+        {/* Sports & Interests */}
         <View style={styles.fieldCard}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Sports & Interests</Text>
@@ -284,7 +340,7 @@ export default function EditProfileScreen({ navigation }) {
             )}
           </View>
 
-          {/* Selected Tray (Always visible so users see what they chose) */}
+          {/* Selected Tray */}
           {interests.length > 0 && (
             <View style={styles.selectedSection}>
               <Text style={styles.subLabel}>Selected:</Text>
@@ -402,6 +458,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.green || '#16A34A',
+  },
+  deletePhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  deletePhotoText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.danger || '#DC2626',
+  },
+  pressedOpacity: {
+    opacity: 0.7,
   },
   fieldCard: {
     backgroundColor: '#fff',

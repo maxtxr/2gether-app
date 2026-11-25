@@ -15,7 +15,7 @@ import { useApp } from '../context/AppContext';
 import { Avatar } from '../components';
 import { supabase } from '../../lib/supabase';
 
-export default function ChatsScreen({ navigation }) {
+export default function ChatsListScreen({ navigation }) {
   const { loadUserConversations, showFeedback } = useApp();
 
   const [conversations, setConversations] = useState([]);
@@ -77,25 +77,32 @@ export default function ChatsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.heading}>
-        <Text style={styles.title}>Chats</Text>
-        <Text style={styles.subtitle}>
-          Your conversations with hosts and participants
-        </Text>
-      </View>
-
       <FlatList
         data={conversations}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 16, flexGrow: 1 }}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          conversations.length > 0 ? (
+            <Text style={styles.subtitle}>
+              Conversations with hosts and participants
+            </Text>
+          ) : null
+        }
         ListEmptyComponent={
-          <Text style={styles.empty}>
-            No chats yet. Join an event and message the host to start one.
-          </Text>
+          <View style={styles.emptyContainer}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={48}
+              color={colors.muted}
+            />
+            <Text style={styles.empty}>
+              No chats yet. Join an event and message the host to start one.
+            </Text>
+          </View>
         }
         renderItem={({ item }) => (
           <Pressable
-            style={styles.card}
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
             onPress={() =>
               navigation.navigate('Chat', {
                 conversationId: item.id,
@@ -109,7 +116,7 @@ export default function ChatsScreen({ navigation }) {
             <Avatar
               source={item.otherAvatarUrl}
               name={item.otherName}
-              size={44}
+              size={46}
             />
 
             <View style={styles.details}>
@@ -133,7 +140,12 @@ export default function ChatsScreen({ navigation }) {
               </Text>
 
               <Text style={styles.time}>
-                {new Date(item.lastMessageAt).toLocaleString()}
+                {new Date(item.lastMessageAt).toLocaleString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </Text>
             </View>
 
@@ -147,7 +159,7 @@ export default function ChatsScreen({ navigation }) {
 
             <Ionicons
               name="chevron-forward"
-              size={20}
+              size={18}
               color={colors.muted}
             />
           </Pressable>
@@ -168,25 +180,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.bg,
   },
-  heading: {
+  listContent: {
     padding: 16,
-    paddingBottom: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.text,
+    flexGrow: 1,
   },
   subtitle: {
     color: colors.muted,
-    marginTop: 4,
+    fontSize: 13,
+    marginBottom: 12,
+    marginLeft: 2,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 80,
+    paddingHorizontal: 24,
   },
   empty: {
     textAlign: 'center',
     color: colors.muted,
-    marginTop: 40,
-    paddingHorizontal: 24,
+    marginTop: 12,
     lineHeight: 20,
+    fontSize: 14,
   },
   card: {
     flexDirection: 'row',
@@ -195,11 +211,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  cardPressed: {
+    backgroundColor: '#F9FAFB',
   },
   details: {
     flex: 1,
     marginLeft: 12,
-    marginRight: 4,
+    marginRight: 6,
   },
   nameRow: {
     flexDirection: 'row',
@@ -208,6 +229,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontWeight: '700',
+    fontSize: 15,
     color: colors.text,
     flexShrink: 1,
   },
@@ -239,18 +261,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   unreadBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: colors.orange,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    marginRight: 8,
+    paddingHorizontal: 5,
+    marginRight: 6,
   },
   unreadText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
 });

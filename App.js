@@ -13,12 +13,12 @@ import { AppTabs, headerOptions } from './src/navigation';
 import LoginScreen from './src/screens/LoginScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 import EventDetailScreen from './src/screens/EventDetailScreen';
-import ChatScreen from './src/screens/ChatScreen';
 import CreateEventScreen from './src/screens/CreateEventScreen';
 import ReviewScreen from './src/screens/ReviewScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import EventChatsScreen from './src/screens/EventChatsScreen';
-import ChatsScreen from './src/screens/ChatsScreen';
+import EventChatsScreen from './src/screens/EventChatsScreen'; //???
+import ChatListScreen from './src/screens/ChatListScreen';
+import ChatScreen from './src/screens/ChatScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
 import UserProfileScreen from './src/screens/UserProfileScreen';
@@ -73,19 +73,19 @@ function Root() {
             options={{ title: 'Event chats' }}
           />
           <Stack.Screen
+            name="Chat"
+            component={ChatScreen}
+            options={{ title: 'Chat' }}
+          />
+          <Stack.Screen
             name="Chats"
-            component={ChatsScreen}
+            component={ChatListScreen}
             options={{ title: 'Chats' }}
           />
           <Stack.Screen
             name="Notifications"
             component={NotificationsScreen}
-            options={{ title: 'Alerts' }}
-          />
-          <Stack.Screen
-            name="Chat"
-            component={ChatScreen}
-            options={{ title: 'Chat' }}
+            options={{ title: 'Notifications' }}
           />
           <Stack.Screen
             name="CreateEvent"

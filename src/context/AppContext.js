@@ -207,9 +207,9 @@ export function AppProvider({ children }) {
       avatarUrl: avatarPublicUrl(profile?.avatar_path),
       since: profile?.created_at
         ? new Date(profile.created_at).toLocaleDateString('en-US', {
-            month: 'short',
-            year: 'numeric',
-          })
+          month: 'short',
+          year: 'numeric',
+        })
         : null,
     };
   }, []);
@@ -470,8 +470,8 @@ export function AppProvider({ children }) {
 
         const imageUrl = review.image_path
           ? supabase.storage
-              .from('review-images')
-              .getPublicUrl(review.image_path).data.publicUrl
+            .from('review-images')
+            .getPublicUrl(review.image_path).data.publicUrl
           : null;
 
         const mappedReview = {
@@ -483,7 +483,7 @@ export function AppProvider({ children }) {
           accessibilityAccuracy: review.accessibility_accuracy,
           imageUrl,
           author: profile?.name || 'Unknown',
-          authorAvatar : avatarPublicUrl(profile?.avatar_path),
+          authorAvatar: avatarPublicUrl(profile?.avatar_path),
           eventTitle: event?.title || 'Event',
           createdAt: review.created_at,
         };
@@ -772,14 +772,15 @@ export function AppProvider({ children }) {
         data
       );
 
-      // `mapUser` only receives the updated profile row; keep the original
-      // "member since" label if the row does not carry a usable date.
       if (!mapped.since || mapped.since === 'Invalid Date') {
         mapped.since = currentUser.since;
       }
 
-      // Bust cache when the same storage path is reused
-      if (mapped.avatarUrl && updates.avatar_path) {
+      // If avatar was explicitly cleared, ensure avatarUrl is null
+      if (updates.avatar_path === null) {
+        mapped.avatarUrl = null;
+        mapped.avatarPath = null;
+      } else if (mapped.avatarUrl && updates.avatar_path) {
         mapped.avatarUrl = `${mapped.avatarUrl}?t=${Date.now()}`;
       }
 
@@ -810,6 +811,26 @@ export function AppProvider({ children }) {
     if (uploadError) throw uploadError;
 
     await updateProfile({ avatar_path: imagePath });
+  };
+
+  // Apagar fotografia de perfil (Storage + Base de Dados)
+  const deleteAvatar = async () => {
+    if (!user) {
+      throw new Error('You must be logged in to remove your photo.');
+    }
+
+    // List and delete existing avatar files in the user folder
+    const { data: listed } = await supabase.storage
+      .from('avatars')
+      .list(user.id);
+
+    if (listed && listed.length > 0) {
+      const paths = listed.map((file) => `${user.id}/${file.name}`);
+      await supabase.storage.from('avatars').remove(paths);
+    }
+
+    // Set avatar_path to null in profiles table
+    await updateProfile({ avatar_path: null });
   };
 
   // ---------------- NOTIFICATIONS ----------------
@@ -1256,8 +1277,8 @@ export function AppProvider({ children }) {
       accessibilityAccuracy: data.accessibility_accuracy,
       imageUrl: imagePath
         ? supabase.storage
-            .from('review-images')
-            .getPublicUrl(imagePath).data.publicUrl
+          .from('review-images')
+          .getPublicUrl(imagePath).data.publicUrl
         : null,
       author: user.name,
       authorAvatar: user.avatarUrl,
@@ -1678,6 +1699,7 @@ export function AppProvider({ children }) {
     deleteAccount,
     updateProfile,
     uploadAvatar,
+    deleteAvatar,
     loadPublicProfile,
     showFeedback,
 

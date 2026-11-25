@@ -5,10 +5,8 @@ import { colors, radii } from '../theme';
 import { useApp } from '../context/AppContext';
 import { ConfirmModal } from '../components';
 
-// Ícone de cada notificação conforme o que aconteceu
 function iconFor(n) {
   const title = (n.title || '').toLowerCase();
-
   if (n.type === 'message') return 'chatbubble-ellipses-outline';
   if (title.includes('joined')) return 'person-add-outline';
   if (title.includes('spot')) return 'ticket-outline';
@@ -18,7 +16,6 @@ function iconFor(n) {
   return 'notifications-outline';
 }
 
-// "14:05" para hoje/ontem; "19 Nov, 14:05" para datas mais antigas
 function timeLabel(createdAt, showDate) {
   const date = new Date(createdAt);
   const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -49,9 +46,7 @@ export default function NotificationsScreen({ navigation }) {
       g: 'Today',
       items: notifications.filter((n) => {
         const date = new Date(n.createdAt);
-        const today = new Date();
-
-        return date.toDateString() === today.toDateString();
+        return date.toDateString() === new Date().toDateString();
       }),
     },
     {
@@ -60,7 +55,6 @@ export default function NotificationsScreen({ navigation }) {
         const date = new Date(n.createdAt);
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-
         return date.toDateString() === yesterday.toDateString();
       }),
     },
@@ -71,8 +65,10 @@ export default function NotificationsScreen({ navigation }) {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
 
-        return date.toDateString() !== new Date().toDateString()
-          && date.toDateString() !== yesterday.toDateString();
+        return (
+          date.toDateString() !== new Date().toDateString() &&
+          date.toDateString() !== yesterday.toDateString()
+        );
       }),
     },
   ].filter((group) => group.items.length > 0);
@@ -80,22 +76,32 @@ export default function NotificationsScreen({ navigation }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ padding: 16 }}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.title}>Notifications</Text>
-
-      <View style={styles.row}>
-        <Text style={styles.sub}>{unreadCount} unread</Text>
+      {/* Top Bar with Counter and Bulk Actions */}
+      <View style={styles.topBar}>
+        <Text style={styles.sub}>
+          {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+        </Text>
 
         {notifications.length > 0 && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={styles.actionsGroup}>
             {unreadCount > 0 && (
-              <Pressable onPress={markAllRead} style={styles.action} accessibilityRole="button">
+              <Pressable
+                onPress={markAllRead}
+                style={styles.actionBtn}
+                accessibilityRole="button"
+              >
                 <Text style={styles.actionText}>Mark all as read</Text>
               </Pressable>
             )}
 
-            <Pressable onPress={() => setConfirmClear(true)} style={styles.action} accessibilityRole="button">
+            <Pressable
+              onPress={() => setConfirmClear(true)}
+              style={styles.actionBtn}
+              accessibilityRole="button"
+            >
               <Text style={[styles.actionText, { color: colors.danger }]}>
                 Clear all
               </Text>
@@ -106,7 +112,7 @@ export default function NotificationsScreen({ navigation }) {
 
       {groups.map(({ g, items }) => (
         <View key={g}>
-          <Text style={styles.group}>{g}</Text>
+          <Text style={styles.groupHeading}>{g}</Text>
 
           {items.map((n) => (
             <View key={n.id} style={styles.card}>
@@ -120,9 +126,7 @@ export default function NotificationsScreen({ navigation }) {
                       const event = events.find((e) => e.id === n.eventId);
 
                       if (event?.host_id === user?.id) {
-                        navigation.navigate('EventChats', {
-                          eventId: n.eventId,
-                        });
+                        navigation.navigate('EventChats', { eventId: n.eventId });
                       } else if (n.conversationId) {
                         navigation.navigate('Chat', {
                           conversationId: n.conversationId,
@@ -130,16 +134,12 @@ export default function NotificationsScreen({ navigation }) {
                           otherName: event?.host,
                         });
                       } else {
-                        navigation.navigate('EventDetail', {
-                          id: n.eventId,
-                        });
+                        navigation.navigate('EventDetail', { id: n.eventId });
                       }
                     } else if (n.eventId && iconFor(n) === 'star-outline') {
                       navigation.navigate('Review', { id: n.eventId });
                     } else if (n.eventId) {
-                      navigation.navigate('EventDetail', {
-                        id: n.eventId,
-                      });
+                      navigation.navigate('EventDetail', { id: n.eventId });
                     }
                   } catch (error) {
                     showFeedback({
@@ -152,17 +152,12 @@ export default function NotificationsScreen({ navigation }) {
                 accessibilityRole="button"
               >
                 <View style={styles.icon}>
-                  <Ionicons
-                    name={iconFor(n)}
-                    size={18}
-                    color={colors.green}
-                  />
+                  <Ionicons name={iconFor(n)} size={18} color={colors.green} />
                 </View>
 
-                <View style={styles.content}>
+                <View style={styles.contentArea}>
                   <Text style={styles.cardTitle}>{n.title}</Text>
                   <Text style={styles.body}>{n.message}</Text>
-
                   <Text style={styles.time}>
                     {timeLabel(n.createdAt, g === 'Earlier')}
                   </Text>
@@ -173,16 +168,12 @@ export default function NotificationsScreen({ navigation }) {
 
               <Pressable
                 onPress={() => deleteNotification(n.id)}
-                hitSlop={4}
+                hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel="Delete notification"
                 style={styles.deleteBtn}
               >
-                <Ionicons
-                  name="trash-outline"
-                  size={17}
-                  color={colors.muted}
-                />
+                <Ionicons name="trash-outline" size={16} color={colors.muted} />
               </Pressable>
             </View>
           ))}
@@ -190,14 +181,19 @@ export default function NotificationsScreen({ navigation }) {
       ))}
 
       {notifications.length === 0 && (
-        <Text style={styles.empty}>No new notifications</Text>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="notifications-off-outline" size={48} color={colors.muted} />
+          <Text style={styles.empty}>No notifications</Text>
+        </View>
       )}
 
       <ConfirmModal
         visible={confirmClear}
         variant="danger"
         title="Clear all notifications?"
-        message={`This will permanently delete ${notifications.length} ${notifications.length === 1 ? 'notification' : 'notifications'}.`}
+        message={`This will permanently delete ${notifications.length} ${
+          notifications.length === 1 ? 'notification' : 'notifications'
+        }.`}
         confirmText="Clear all"
         cancelText="Cancel"
         onConfirm={async () => {
@@ -223,23 +219,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.text,
+  content: {
+    padding: 16,
+    paddingBottom: 32,
   },
-  row: {
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 6,
+    marginBottom: 8,
   },
   sub: {
+    fontSize: 13,
+    fontWeight: '600',
     color: colors.muted,
   },
-  action: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+  actionsGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: radii.pill,
     backgroundColor: colors.chip,
   },
@@ -248,21 +249,15 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 12,
   },
-  deleteBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.chip,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-    alignSelf: 'center',
-  },
-  group: {
+  groupHeading: {
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
     marginTop: 14,
-    marginBottom: 7,
+    marginBottom: 8,
+    marginLeft: 2,
   },
   card: {
     flexDirection: 'row',
@@ -271,13 +266,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
     marginBottom: 8,
-    minHeight: 70,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
   },
   cardMain: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 48,
   },
   icon: {
     width: 36,
@@ -289,7 +284,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
-  content: {
+  contentArea: {
     flex: 1,
     justifyContent: 'center',
     minWidth: 0,
@@ -318,10 +313,26 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.orange,
     marginLeft: 8,
+    marginRight: 4,
+  },
+  deleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.chip,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 80,
   },
   empty: {
     textAlign: 'center',
     color: colors.muted,
-    marginTop: 60,
+    marginTop: 10,
+    fontSize: 14,
   },
 });
