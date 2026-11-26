@@ -31,7 +31,6 @@ export default function EventDetailScreen({ route, navigation }) {
     spotsLeft,
     joinEvent,
     leaveEvent,
-    getOrCreateConversation,
     deleteEvent,
     showFeedback,
   } = useApp();
@@ -668,21 +667,12 @@ export default function EventDetailScreen({ route, navigation }) {
                 styles.messageHostCard,
                 pressed && styles.pressed,
               ]}
-              onPress={async () => {
-                try {
-                  const conversation = await getOrCreateConversation(event.id);
-                  navigation.navigate('Chat', {
-                    conversationId: conversation.id,
-                    eventId: event.id,
-                    otherName: event.host,
-                  });
-                } catch (error) {
-                  showFeedback({
-                    title: 'Chat error',
-                    message: error.message,
-                    variant: 'danger',
-                  });
-                }
+              onPress={() => {
+                navigation.navigate('Chat', {
+                  conversationId: null,
+                  eventId: event.id,
+                  otherName: event.host,
+                });
               }}
               accessibilityRole="button"
             >

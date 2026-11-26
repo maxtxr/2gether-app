@@ -20,12 +20,26 @@ import { Avatar } from '../components';
 import { supabase } from '../../lib/supabase';
 
 export default function ChatScreen({ route, navigation }) {
-  const { events, chats, loadMessages, markConversationRead, sendMessage, showFeedback } = useApp();
+  const {
+    events,
+    chats,
+    loadMessages,
+    markConversationRead,
+    sendMessage,
+    showFeedback,
+  } = useApp();
 
   const { conversationId, eventId, otherName } = route.params;
 
+  // A conversa pode ainda não existir quando o ecrã é aberto.
+  const [activeConversationId, setActiveConversationId] = useState(
+    conversationId || null
+  );
+
   const event = events.find((e) => e.id === eventId);
-  const messages = chats[conversationId] || [];
+  const messages = activeConversationId
+    ? chats[activeConversationId] || []
+    : [];
 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -36,8 +50,7 @@ export default function ChatScreen({ route, navigation }) {
 
   const listRef = useRef(null);
 
-  // Keep the message input above the keyboard on both platforms. Android uses
-  // edge-to-edge, so adjustResize alone does not move the screen content.
+  // Keep the message input above the keyboard on both platforms.
   useEffect(() => {
     const showEvent =
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -68,12 +81,12 @@ export default function ChatScreen({ route, navigation }) {
   }, [navigation, otherName]);
 
   useEffect(() => {
-    if (!conversationId) return;
+    if (!activeConversationId) return;
 
     const load = async () => {
       try {
-        await markConversationRead(conversationId);
-        await loadMessages(conversationId);
+        await markConversationRead(activeConversationId);
+        await loadMessages(activeConversationId);
       } catch (error) {
         console.error('Error loading messages:', error.message);
       }
@@ -82,14 +95,14 @@ export default function ChatScreen({ route, navigation }) {
     load();
 
     const channel = supabase
-      .channel(`chat-${conversationId}`)
+      .channel(`chat-${activeConversationId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`,
+          filter: `conversation_id=eq.${activeConversationId}`,
         },
         () => {
           load();
@@ -102,7 +115,7 @@ export default function ChatScreen({ route, navigation }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId]);
+  }, [activeConversationId]);
 
   // Enviar mensagem
   const send = async () => {
@@ -113,7 +126,28 @@ export default function ChatScreen({ route, navigation }) {
     try {
       setSending(true);
 
-      await sendMessage(conversationId, message);
+      const result = await sendMessage(
+        activeConversationId,
+        message,
+        eventId
+      );
+
+      if (!activeConversationId) {
+        const newConversationId =
+          result?.conversation_id || result?.conversationId;
+
+        if (!newConversationId) {
+          throw new Error(
+            'The message was sent, but the conversation ID could not be retrieved.'
+          );
+        }
+
+        setActiveConversationId(newConversationId);
+
+        navigation.setParams({
+          conversationId: newConversationId,
+        });
+      }
 
       setText('');
     } catch (error) {

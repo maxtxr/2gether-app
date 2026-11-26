@@ -1561,20 +1561,33 @@ export function AppProvider({ children }) {
     }
   };
 
+
   // Enviar uma mensagem
-  const sendMessage = async (conversationId, message) => {
+  const sendMessage = async (conversationId, message, eventId = null) => {
     if (!user) {
       throw new Error('You must be logged in to send messages.');
     }
 
     const trimmedMessage = message.trim();
 
-    if (!trimmedMessage) return;
+    if (!trimmedMessage) return null;
+
+    // Se ainda não existir conversa, criá-la ou recuperar uma existente.
+    let activeConversationId = conversationId;
+
+    if (!activeConversationId) {
+      if (!eventId) {
+        throw new Error('An event is required to start a conversation.');
+      }
+
+      const conversation = await getOrCreateConversation(eventId);
+      activeConversationId = conversation.id;
+    }
 
     const { data, error } = await supabase
       .from('messages')
       .insert({
-        conversation_id: conversationId,
+        conversation_id: activeConversationId,
         sender_id: user.id,
         content: trimmedMessage,
       })
@@ -1598,8 +1611,8 @@ export function AppProvider({ children }) {
 
     setChats((current) => ({
       ...current,
-      [conversationId]: [
-        ...(current[conversationId] || []),
+      [activeConversationId]: [
+        ...(current[activeConversationId] || []),
         newMessage,
       ],
     }));
