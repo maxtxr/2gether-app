@@ -68,7 +68,7 @@ Built with **React Native + Expo** and a **Supabase** backend (auth, PostgreSQL,
 | **Framework** | React Native 0.88 · React 19.3 · Expo SDK 58 | Cross-platform runtime targeting Android & iOS. |
 | **Navigation** | React Navigation 7 | Stack navigation (`@react-navigation/native-stack`) & bottom tabs (`@react-navigation/bottom-tabs`). |
 | **Backend** | Supabase | Cloud PostgreSQL, Row Level Security (RLS), Auth, Storage buckets, and Realtime WebSockets. |
-| **Maps & Geocoding** | Leaflet / OpenStreetMap / `react-native-maps` | Interactive event mapping and Nominatim/Photon reverse-geocoding. |
+| **Maps & Geocoding** | Leaflet / OpenStreetMap / `react-native-maps` | Interactive event mapping and Nominatim reverse-geocoding. |
 | **Media** | `expo-image-picker` · `expo-image-manipulator` | Device photo library integration and compression. |
 | **Icons & Typography** | `@expo/vector-icons` (Ionicons, MaterialCommunityIcons) | Standardized icons across categories and navigation. |
 | **State Management** | React Context (`src/context/AppContext.js`) | Global state for sessions, cached events, chats, notifications, and feedback modals. |
