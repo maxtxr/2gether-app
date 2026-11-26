@@ -1,209 +1,193 @@
 # 2Gether
 
-A mobile app that connects people through casual, community-driven sports and outdoor events. Find an event that matches your level and accessibility needs, join it, talk to the organizer, host your own and review it afterwards.
+A mobile application that connects people through casual, community-driven sports and outdoor events. Find an activity that matches your proficiency level and accessibility requirements, join it, message the organizer beforehand, host your own, and review completed sessions with an accessibility audit.
 
 > Find what fits. Go together.
 
-Built with **React Native + Expo** and a **Supabase** backend (auth, database, storage, realtime) for the *Interação Pessoa-Máquina 2026/27* course at NOVA FCT (Lab class P1, Group 1).
+Built with **React Native + Expo** and a **Supabase** backend (auth, PostgreSQL, storage, realtime) for the *Interação Pessoa-Máquina 2026/27* course at NOVA School of Science and Technology (NOVA FCT) — Lab class P1, Group 1.
+
+---
 
 ## Features
 
 ### 🏠 Home
 
-- Greeting and **suggested events** ranked by your interests
-- **Feed** of reviews and photos from past events
+- Personalized greeting and **suggested events** tailored to your declared interests.
+- Community **Feed** showing recent ratings, reviews, and event photos from completed sessions.
 
-### 🔍 Search
+### 🔍 Search & Explore
 
-- Search by name, place, area, sport or subcategory
-- Filter by category, subcategory, level, accessibility (wheelchair friendly, flat terrain, low intensity, all ages, no equipment needed) and distance
-- Date filter and sorting (nearest, soonest, most participants)
-- **List / Map view toggle**: tap a pin to open the event
+- Search by activity title, venue, neighborhood, sport, or specific subcategory.
+- Multi-criteria filtering: category, subcategory, proficiency level, physical accessibility tags (*Wheelchair friendly*, *Flat terrain*, *Low intensity*, *All ages*, *No equipment needed*), and date.
+- **List / Map View Toggle**: Inspect events pinned geographically on OpenStreetMap / native maps and tap to view details.
 
-### 📅 My events
+### 📅 My Events
 
-- **Upcoming**: events you're going to and events you host
-- **Past**: events you attended, with a **Review** button (★ rating shown once reviewed), and events you hosted
-- **Create event**: name, category and subcategory, level, accessibility tags, date & time pickers, location picked on a map (with address search) and capacity
+- **Upcoming**: Track events you are attending as well as events you are hosting.
+- **Past**: Review your attendance history, launch the post-event **Review** flow, and view earned review stars.
+- **Create Event**: Configure event name, sports category & subcategory, level, accessibility tags, date/time pickers, capacity limit, and meeting point selection directly on the map with reverse-geocoded addresses.
 
-### 📍 Event detail
+### 📍 Event Detail & Host Management
 
-- Host, date, place, participants, spots left and accessibility badges
-- **Join** / **Cancel participation**
-- **Waitlist** when the event is full (you get a notification when a spot opens)
-- **Message organizer**, available before joining. Hosts get **Chats** with every participant.
-- Hosts of upcoming events can **edit** or **delete** the event
-- After the event: **Leave a review** opens the review screen (also reachable from My events → Past → Review)
+- **Hero Card**: High-contrast layout displaying the activity icon, title, category, level chip, status badge (*Upcoming* / *Past*), and organizer tile.
+- **Pre-Registration Outreach**: **"Message organizer"** lets users ask questions regarding gear or routes before joining.
+- **Registration Controls**: One-tap **Join event** and **Cancel participation** with modal safeguards.
+- **Dynamic Waitlist**: When maximum capacity is reached, users can join the waitlist to receive instant notifications if a spot opens up.
+- **Host Tools**: Hosts get a dedicated management hub to view all participant chats, edit upcoming event parameters, or delete the event (which automatically cascades notifications to attendees).
+- **Post-Event Review**: Attended past events show a **"Leave a review"** prompt.
 
-### ⭐ Review
+### ⭐ Review & Accessibility Audit
 
-- Star rating (starts empty), written review and optional photo
-- **"Was the accessibility info accurate?"** (Yes / Partly / No), only for events with accessibility tags, shown on the review afterwards
+- 1–5 star rating system, qualitative commentary, and optional photo upload.
+- **Accessibility Verification Prompt**: *"Was the accessibility info accurate?"* (*Yes* / *Partly* / *No*), validating the host's claims to build community trust.
 
-### 🔔 Notifications *(badge on the tab)*
+### 🔔 Notifications *(Badge Counter on Navigation)*
 
-- Someone joined your event, new messages, spot available on a waitlist, event created
-- Tap to open the related event or chat, mark one/all as read, delete one, **clear all**
-- Realtime: new notifications appear without refreshing
+- Realtime alerts via Supabase WebSockets for join events, waitlist spot openings, organizer chat messages, and schedule updates.
+- Grouped intuitively by date: **Today**, **Yesterday**, and **Earlier**.
+- Controls to mark individual items or all as read, delete individual entries, or trigger **"Clear all"**.
 
-### 👤 Profile
+### 👤 Profile & User Profiles
 
-- Photo (avatar upload), name, bio, interests and **accessibility preferences** (editable)
-- Gamified **badges** (First Event, Social Butterfly, Host)
-- Attended events, received reviews and average rating
-- **View another member's profile** (tap the organiser on an event) with their bio, interests, hosted events and reviews
-- Settings, log out
+- **Profile Customization**: Avatar photo upload with client-side compression (< 1 MB), dedicated **avatar removal**, bio editing, sports interests search tray, and accessibility preferences.
+- **Public Profiles**: Tap on any host or attendee avatar to view their public profile, member tenure, bio, interests, and hosted events with received ratings.
+- **Gamified Achievements**: Automated badges (*First Event*, *Social Butterfly*, *Host*) that unlock as user participation grows.
 
-### 🔐 Auth
+### ⚙️ Settings, Privacy & Compliance
 
-- Sign up / log in with email and password (Supabase Auth), with clear validation and error feedback
+- **Preferences**: Working notification toggle switch alongside placeholders for language, time format, and themes.
+- **Legal & GDPR**: Dedicated tabbed screen detailing the **Terms of Service** and **GDPR / Privacy Policy** (Art. 6 legal grounds, data controller info, and data subject rights).
+- **Account Deletion**: Functional permanent account wiping via Supabase RPC (`delete_own_account`) that clears Auth, profile data, avatars, and event media.
 
-## Tech stack
+---
 
-| | |
-| --- | --- |
-| Framework | React Native 0.88 · React 19.3 · Expo SDK 58 |
-| Navigation | React Navigation 7 (native-stack + bottom tabs) |
-| Backend | Supabase (Postgres + Row Level Security, Auth, Storage, Realtime) |
-| Maps | `react-native-maps` (Apple Maps on iOS, Google Maps on Android) |
-| Media | `expo-image-picker`, `expo-image-manipulator` |
-| Icons | `@expo/vector-icons` (Ionicons, MaterialCommunityIcons) |
-| State | React Context (`src/context/AppContext.js`) |
+## Tech Stack
+
+| Layer | Technology | Role & Purpose |
+| :--- | :--- | :--- |
+| **Framework** | React Native 0.88 · React 19.3 · Expo SDK 58 | Cross-platform runtime targeting Android & iOS. |
+| **Navigation** | React Navigation 7 | Stack navigation (`@react-navigation/native-stack`) & bottom tabs (`@react-navigation/bottom-tabs`). |
+| **Backend** | Supabase | Cloud PostgreSQL, Row Level Security (RLS), Auth, Storage buckets, and Realtime WebSockets. |
+| **Maps & Geocoding** | Leaflet / OpenStreetMap / `react-native-maps` | Interactive event mapping and Nominatim/Photon reverse-geocoding. |
+| **Media** | `expo-image-picker` · `expo-image-manipulator` | Device photo library integration and compression. |
+| **Icons & Typography** | `@expo/vector-icons` (Ionicons, MaterialCommunityIcons) | Standardized icons across categories and navigation. |
+| **State Management** | React Context (`src/context/AppContext.js`) | Global state for sessions, cached events, chats, notifications, and feedback modals. |
+
+---
 
 ## Requirements
 
-- **Node.js 22.13+** and npm (required by Expo SDK 58)
-- **Expo Go** on your phone (Android/iOS), or an emulator/simulator
-- Phone and computer on the same Wi-Fi (or use tunnel mode, see below)
-- A `.env` file with the Supabase credentials (see below)
+- **Node.js 22.13+** and npm
+- **Expo Go** app on your physical mobile device (Android / iOS), or an active Android Emulator / iOS Simulator
+- Phone and computer on the same Wi-Fi network (or use `--tunnel` mode)
+- A `.env` file with project Supabase credentials
 
-## Getting started
+---
 
-### 1. Supabase credentials
+## Getting Started
 
-Create a `.env` file in the project root (it is git-ignored):
+### 1. Supabase Credentials
+
+Create a `.env` file in the project root:
 
 ```env
-EXPO_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+EXPO_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-Without it the app cannot start. Ask a group member for the values.
-
-### 2. Install and run
+### 2. Install and Run
 
 ```bash
-npm install      # install dependencies
-npm start        # start the Expo dev server
+# Install dependencies
+npm install
+
+# Start the Expo development server
+npx expo start
+
+# If testing across different subnets or campus Wi-Fi:
+npx expo start --tunnel
 ```
 
-Scan the QR code with Expo Go, or run a specific target:
+Scan the terminal QR code with **Expo Go** (Android) or the Camera app (iOS).
+
+To run on a specific target:
 
 ```bash
 npm run android   # Android emulator
 npm run ios       # iOS simulator
-npm run web       # browser (no maps, see Platform notes)
+npm run web       # Browser preview (maps display placeholder)
 ```
 
-If your phone can't reach the dev server (different network, VPN, …):
+If you encounter stale Metro bundler cache:
 
 ```bash
-npx expo start --tunnel
+npx expo start --clear
 ```
 
-If anything looks stale after pulling changes:
+---
 
-```bash
-npx expo start --clear   # restart with a cleared Metro cache
-```
+## Test Accounts & Evaluation Scenarios
 
-## Test data for the evaluation scenarios
+The database is pre-seeded with test accounts and events tailored for evaluation:
 
-`supabase/seed.sql` fills the database with events, participations, reviews, a chat and notifications that cover the three usability scenarios:
+| Email | Password | Role / Scenario |
+| :--- | :--- | :--- |
+| `teste@gmail.com` | `Teste123?` | General testing account |
+| `tiago@gmail.com` | `tiago123` | **Scenario 1**: Student looking for beginner Padel in Barreiro |
+| `rita@gmail.com` | `rita123` | **Scenario 2**: Host managing *Morning Stretch & Walk* |
+| `sofia@gmail.com` | `sofia123` | **Scenario 3**: Attended *Evening River Run*; needs to review & cancel upcoming event |
 
-1. **Discover an event, join it and contact the organizer.** *Padel for Absolute Beginners* in Barreiro next Saturday at 10:00, plus look-alike events at other levels and in other areas.
-2. **Create and manage a community event.** The tester hosts *Morning Stretch & Walk* and has several "someone joined your event" notifications to view and clear.
-3. **Review past events and cancel a future participation.** *Evening River Run* (past, not reviewed yet) and *Riverside 5K Run* (upcoming, already joined).
+### Automated Database Reset
 
-Setup:
+A scheduled `pg_cron` worker executes `public.reset_test_data()` every day at **04:00 UTC** to ensure deterministic dates relative to current evaluation days.
 
-1. In Supabase → **Authentication → Users → Add user** (tick *Auto Confirm User*), create:
-   `joao@2gether.test` (the tester), `maya@2gether.test` and `paul@2gether.test`.
-2. Enable **pg_cron** in Database → Extensions (the daily reset uses it).
-3. In Supabase → **SQL Editor**, run these in this order:
-   - `supabase/avatar.sql` — profile photos
-   - `supabase/profile_accessibility.sql` — accessibility preferences saved on the profile
-   - `supabase/events_subcategory_icon.sql` — event subcategories and icons
-   - `supabase/notifications.sql` — notify hosts when someone joins
-   - `supabase/reviews_accessibility.sql` — accessibility question in reviews
-   - `supabase/delete_account.sql` — RPC used by "Delete account"
-   - `supabase/seed.sql` — test data and the daily reset
-4. Log in as `joao@2gether.test`.
-
-These files are idempotent, so re-run the relevant ones after pulling changes that touch the database. The base tables, RLS policies, functions and storage buckets already exist in the shared Supabase project and are not recreated by these files.
-
-`seed.sql` creates the database function `public.reset_test_data()` and schedules it with `pg_cron` to run **every day at 04:00 UTC**, so the test data (with dates relative to that day) is always fresh, whenever the app is evaluated. It only deletes and recreates the rows of the three test accounts.
-
-To reset the test data immediately, run in the SQL Editor:
+To instantly reset the database to its pristine state at any point, execute this query in the Supabase SQL Editor:
 
 ```sql
 select public.reset_test_data();
 ```
 
-### Simulating a review
+---
 
-1. Log in as `joao@2gether.test`.
-2. Open **My events → Past**. *Evening River Run* appears without a review yet.
-3. Tap **Review**, pick a star rating, write something and optionally add a photo.
-4. Publish it. The event then shows its rating in **Past**, and the review appears in the **Home** feed, on the event page and on the host's profile.
-
-Other flows you can try with the same seed data:
-
-- **Already reviewed** — *Beach Volleyball Sunday* is in **Past** with a rating.
-- **Cancel a participation** — *Riverside 5K Run* is upcoming and already joined.
-- **Host notifications** — *Morning Stretch & Walk* has a participant and a chat message.
-- **Received reviews** — log in as `maya@2gether.test` or `paul@2gether.test` to see reviews on their hosted events and their public profiles.
-
-## Project structure
+## Project Structure
 
 ```text
-App.js                     # root navigator (auth stack vs. app stack), web alert shim
-lib/supabase.js            # Supabase client (reads .env)
+App.js                        # Root stack navigator, animated splash screen, browser alert shim
+lib/supabase.js               # Initialized Supabase client (reads .env)
 supabase/
-  avatar.sql               # avatars bucket + profiles.avatar_path column
-  profile_accessibility.sql # profiles.accessibility (accessibility preferences)
+  avatar.sql                  # Avatars bucket setup + profiles.avatar_path column
+  profile_accessibility.sql   # profiles.accessibility array column
   events_subcategory_icon.sql # events.subcategory and events.icon columns
-  notifications.sql        # trigger: notify the host when someone joins their event
-  reviews_accessibility.sql # reviews.accessibility_accuracy (yes / partly / no)
-  delete_account.sql       # RPC that removes the user's data and auth account
-  seed.sql                 # test data for the scenarios + daily automatic reset (pg_cron)
+  notifications.sql           # Database triggers for attendee join alerts
+  reviews_accessibility.sql   # reviews.accessibility_accuracy enum column
+  delete_account.sql          # RPC function for complete account and data removal
+  seed.sql                    # Seed dataset and pg_cron daily reset schedule
 src/
-  context/AppContext.js    # global state + all Supabase calls (auth, events, chats, notifications, reviews, badges)
-  navigation/              # bottom tabs and shared header
-  data/options.js          # categories, subcategories, icons, levels, accessibility options
-  theme/index.js           # colors, spacing, radii, level colors
+  context/AppContext.js       # Central state provider (Auth, DB queries, Storage, Realtime)
+  navigation/                 # Bottom tab bar and shared header options
+  data/options.js             # Sports categories, subcategories, levels, accessibility badges
+  theme/index.js              # Color palette, spacing, radii, and difficulty level colors
   components/
-    common/                # Avatar, Button, Chip, ConfirmModal, Logo, ReviewCard, Stars
-    events/                # EventCard, AccessibilityBadge, EventMap (+ .web fallback)
-    profile/               # EditProfileModal, ProfileComponents
-  utils/validation.js      # email and password validation
-  screens/                 # Login, SignUp, Home, Explore (Search), MyEvents, Notifications,
-                           # Profile, UserProfile, Settings, EventDetail, CreateEvent, Review, Chat, EventChats
-assets/                    # app icon, splash, favicon, Android adaptive icons
+    common/                   # Avatar, Button, Chip, ConfirmModal, Logo, ReviewCard, SplashScreen
+    events/                   # EventCard, AccessibilityBadge, EventMap
+    profile/                  # ProfileComponents
+  utils/validation.js         # Email & password validation utilities
+  screens/                    # Login, SignUp, Home, Explore, MyEvents, Notifications,
+                              # Profile, UserProfile, Settings, EventDetail, CreateEvent,
+                              # Review, Chat, EventChats, LegalScreen
+assets/                       # Application icons, splash screens, adaptive icons
 ```
 
-## Platform notes
+---
 
-- **Android / iOS (Expo Go)**: full experience, including maps. No map API keys are needed in Expo Go.
-- **Web**: everything except maps. The map view shows a placeholder, and confirmations use the app's own modal instead of platform alerts.
+## Platform Notes & Boundaries
 
-## Not implemented yet
+- **iOS / Android (Expo Go / Standalone APK)**: Full native capabilities, including Leaflet/native maps, photo manipulation, and real-time alerts.
+- **Web Browser**: Accessible for UI inspection; maps display responsive placeholder containers.
+- **Placeholders**: Password recovery triggers an in-app confirmation modal without dispatching external SMTP emails. Non-notification preferences in Settings display standard "Coming soon" notifications.
 
-These parts of the interface are visible but are placeholders:
-
-- Settings: language, time format, theme and notification preferences ("Coming soon")
-- "Forgot password?" only shows a message, no email is sent
+---
 
 ## License
 
-MIT, based on the [Expo](https://expo.dev) template (see `LICENSE`).
+MIT © 2026 IPM Group 1 (NOVA FCT). Built upon the [Expo](https://expo.dev) ecosystem.
